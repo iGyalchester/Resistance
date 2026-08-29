@@ -36,7 +36,7 @@ public class DemoSecurityConfig {
 
         http.authorizeHttpRequests(configurer ->
                         configurer
-                                .requestMatchers("/").hasRole("EMPLOYEE")
+                                .requestMatchers("/").hasRole("USER")
                                 .requestMatchers("/leaders/**").hasRole("MANAGER")
                                 .requestMatchers("/systems/**").hasRole("ADMIN")
                                 .anyRequest().authenticated()
@@ -63,19 +63,19 @@ public class DemoSecurityConfig {
         UserDetails john = User.builder()
                 .username("john")
                 .password("{noop}test123")
-                .roles("EMPLOYEE")
+                .roles("USER")
                 .build();
 
         UserDetails mary = User.builder()
                 .username("mary")
                 .password("{noop}test123")
-                .roles("EMPLOYEE", "MANAGER")
+                .roles("USER", "MANAGER")
                 .build();
 
         UserDetails susan = User.builder()
                 .username("susan")
                 .password("{noop}test123")
-                .roles("EMPLOYEE", "MANAGER", "ADMIN")
+                .roles("USER", "MANAGER", "ADMIN")
                 .build();
 
         return new InMemoryUserDetailsManager(john, mary, susan);

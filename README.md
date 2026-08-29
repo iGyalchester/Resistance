@@ -1,10 +1,19 @@
 # Resistance
 
-A Spring Boot multi-module monorepo, refactored from the original
+A job application tracker built as a Spring Boot multi-module monorepo,
+refactored from the original
 [darbyluv2code Spring Boot course](https://github.com/darbyluv2code/spring-boot-3-spring-6-hibernate-for-beginners)
 layout of ~150 standalone demo projects into a single Maven build with
 consolidated services, shared libraries, an ETL framework, and deployment
 infrastructure.
+
+## Domain model
+
+- **JobApplication** - the central tracked record: company, position, status
+  (`applied`, `screening`, `interview`, `offer`, `rejected`, `accepted`, `withdrawn`)
+- **Contact** - recruiters, referrals and hiring managers you talk to
+- **Recruiter / RecruiterDetail / JobPosting / Note / Candidate** - the advanced
+  JPA mapping demos (1-1, 1-N, N-N) expressed in tracker terms
 
 ## Project layout
 
@@ -12,16 +21,16 @@ infrastructure.
 Resistance/
 ├── services/
 │   ├── core-service/              Spring Core: DI, qualifiers, scopes, Java config (port 8081)
-│   ├── data-service/              JPA/Hibernate CRUD command-line demo (Student)
-│   ├── rest-api-service/          REST CRUD API for the employee directory (port 8083)
+│   ├── data-service/              JPA/Hibernate CRUD command-line demo (Contact)
+│   ├── rest-api-service/          REST CRUD API for tracked job applications (port 8083)
 │   ├── security-service/          REST API + JDBC users/roles/bcrypt security (port 8084)
-│   ├── mvc-service/               Spring MVC + Thymeleaf CRUD & validated forms (port 8085)
+│   ├── mvc-service/               Spring MVC + Thymeleaf application CRUD & forms (port 8085)
 │   ├── mvc-security-service/      MVC form login, roles, custom tables (port 8086)
 │   └── advanced-data-service/     JPA advanced mappings CLI demo (1-1, 1-N, N-N)
 │
 ├── shared/
 │   ├── shared-models/             JPA entities and DTOs
-│   ├── shared-validation/         Custom Bean Validation constraints (@CourseCode)
+│   ├── shared-validation/         Custom Bean Validation constraints (@ReferralCode)
 │   ├── shared-exceptions/         Common exceptions and API error payloads
 │   └── shared-utils/              CSV parsing and normalization helpers
 │
@@ -74,25 +83,27 @@ Full stack (MySQL, four web services, gateway):
 docker compose -f infrastructure/docker-compose.yml up --build
 ```
 
-The gateway then serves e.g. `http://localhost:8080/rest-api/api/employees`.
+The gateway then serves e.g. `http://localhost:8080/rest-api/api/applications`.
 
 ## ETL
 
-`etl-runner` imports employees from CSV through the
+`etl-runner` imports job applications from CSV through the
 extract → validate → transform → load pipeline defined in `etl-core`:
 
 ```bash
 mvn -pl etl/etl-runner -am spring-boot:run
 ```
 
-By default it processes the bundled `sample-data/employees.csv` in dry-run
+By default it processes the bundled `sample-data/applications.csv` in dry-run
 mode. Set `etl.dry-run=false` to write to the database and
 `etl.input-location=file:/path/to/file.csv` to point at your own data.
 
 ## Where the course projects went
 
 Each service is the final, most complete project of its course section,
-repackaged under `com.resistance.*` with entities, validation, and
+repackaged under `com.resistance.*`, renamed into the job tracker domain
+(Employee -> JobApplication, Student -> Contact, Instructor -> Recruiter,
+Course -> JobPosting, Review -> Note), with entities, validation, and
 exceptions extracted into `shared/`:
 
 | Module | Origin |

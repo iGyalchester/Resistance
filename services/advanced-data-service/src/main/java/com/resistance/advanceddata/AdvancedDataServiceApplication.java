@@ -23,327 +23,327 @@ public class AdvancedDataServiceApplication {
 
 		return runner -> {
 
-			// createCourseAndStudents(appDAO);
+			// createJobPostingAndCandidates(appDAO);
 
-			// findCourseAndStudents(appDAO);
+			// findJobPostingAndCandidates(appDAO);
 
-			// findStudentAndCourses(appDAO);
+			// findCandidateAndJobPostings(appDAO);
 
-			addMoreCoursesForStudent(appDAO);
+			addMoreJobPostingsForCandidate(appDAO);
 
 		};
 	}
 
-	private void addMoreCoursesForStudent(AppDAO appDAO) {
+	private void addMoreJobPostingsForCandidate(AppDAO appDAO) {
 
 		int theId = 2;
-		Student tempStudent = appDAO.findStudentAndCoursesByStudentId(theId);
+		Candidate tempCandidate = appDAO.findCandidateAndJobPostingsByCandidateId(theId);
 
-		// create more courses
-		Course tempCourse1 = new Course("Rubik's Cube - How to Speed Cube");
-		Course tempCourse2 = new Course("Atari 2600 - Game Development");
+		// create more jobPostings
+		JobPosting tempJobPosting1 = new JobPosting("Rubik's Cube - How to Speed Cube");
+		JobPosting tempJobPosting2 = new JobPosting("Atari 2600 - Game Development");
 
-		// add courses to student
-		tempStudent.addCourse(tempCourse1);
-		tempStudent.addCourse(tempCourse2);
+		// add jobPostings to candidate
+		tempCandidate.addJobPosting(tempJobPosting1);
+		tempCandidate.addJobPosting(tempJobPosting2);
 
-		System.out.println("Updating student: " + tempStudent);
-		System.out.println("associated courses: " + tempStudent.getCourses());
+		System.out.println("Updating candidate: " + tempCandidate);
+		System.out.println("associated jobPostings: " + tempCandidate.getJobPostings());
 
-		appDAO.update(tempStudent);
+		appDAO.update(tempCandidate);
 
 		System.out.println("Done!");
 	}
 
-	private void findStudentAndCourses(AppDAO appDAO) {
+	private void findCandidateAndJobPostings(AppDAO appDAO) {
 
 		int theId = 2;
-		Student tempStudent = appDAO.findStudentAndCoursesByStudentId(theId);
+		Candidate tempCandidate = appDAO.findCandidateAndJobPostingsByCandidateId(theId);
 
-		System.out.println("Loaded student: " + tempStudent);
-		System.out.println("Courses: " + tempStudent.getCourses());
+		System.out.println("Loaded candidate: " + tempCandidate);
+		System.out.println("JobPostings: " + tempCandidate.getJobPostings());
 
 		System.out.println("Done!");
 	}
 
-	private void findCourseAndStudents(AppDAO appDAO) {
+	private void findJobPostingAndCandidates(AppDAO appDAO) {
 
 		int theId = 10;
-		Course tempCourse = appDAO.findCourseAndStudentsByCourseId(theId);
+		JobPosting tempJobPosting = appDAO.findJobPostingAndCandidatesByJobPostingId(theId);
 
-		System.out.println("Loaded course: " + tempCourse);
-		System.out.println("Students: " + tempCourse.getStudents());
-
-		System.out.println("Done!");
-	}
-
-	private void createCourseAndStudents(AppDAO appDAO) {
-
-		// create a course
-		Course tempCourse = new Course("Pacman - How To Score One Million Points");
-
-		// create the students
-		Student tempStudent1 = new Student("John", "Doe", "john@resistance.com");
-		Student tempStudent2 = new Student("Mary", "Public", "mary@resistance.com");
-
-		// add students to the course
-		tempCourse.addStudent(tempStudent1);
-		tempCourse.addStudent(tempStudent2);
-
-		// save the course and associated students
-		System.out.println("Saving the course: " + tempCourse);
-		System.out.println("associated students: " + tempCourse.getStudents());
-
-		appDAO.save(tempCourse);
+		System.out.println("Loaded job posting: " + tempJobPosting);
+		System.out.println("Candidates: " + tempJobPosting.getCandidates());
 
 		System.out.println("Done!");
 	}
 
-	private void retrieveCourseAndReviews(AppDAO appDAO) {
+	private void createJobPostingAndCandidates(AppDAO appDAO) {
 
-		// get the course and reviews
+		// create a job posting
+		JobPosting tempJobPosting = new JobPosting("Pacman - How To Score One Million Points");
+
+		// create the candidates
+		Candidate tempCandidate1 = new Candidate("John", "Doe", "john@resistance.com");
+		Candidate tempCandidate2 = new Candidate("Mary", "Public", "mary@resistance.com");
+
+		// add candidates to the job posting
+		tempJobPosting.addCandidate(tempCandidate1);
+		tempJobPosting.addCandidate(tempCandidate2);
+
+		// save the job posting and associated candidates
+		System.out.println("Saving the job posting: " + tempJobPosting);
+		System.out.println("associated candidates: " + tempJobPosting.getCandidates());
+
+		appDAO.save(tempJobPosting);
+
+		System.out.println("Done!");
+	}
+
+	private void retrieveJobPostingAndNotes(AppDAO appDAO) {
+
+		// get the job posting and notes
 		int theId = 10;
-		Course tempCourse = appDAO.findCourseAndReviewsByCourseId(theId);
+		JobPosting tempJobPosting = appDAO.findJobPostingAndNotesByJobPostingId(theId);
 
-		// print the course
-		System.out.println(tempCourse);
+		// print the job posting
+		System.out.println(tempJobPosting);
 
-		// print the reviews
-		System.out.println(tempCourse.getReviews());
-
-		System.out.println("Done!");
-	}
-
-	private void createCourseAndReviews(AppDAO appDAO) {
-
-		// create a course
-		Course tempCourse = new Course("Pacman - How To Score One Million Points");
-
-		// add some reviews
-		tempCourse.addReview(new Review("Great course ... loved it!"));
-		tempCourse.addReview(new Review("Cool course, job well done."));
-		tempCourse.addReview(new Review("What a dumb course, you are an idiot!"));
-
-		// save the course ... and leverage the cascade all
-		System.out.println("Saving the course");
-		System.out.println(tempCourse);
-		System.out.println(tempCourse.getReviews());
-
-		appDAO.save(tempCourse);
+		// print the notes
+		System.out.println(tempJobPosting.getNotes());
 
 		System.out.println("Done!");
 	}
 
-	private void deleteCourse(AppDAO appDAO) {
+	private void createJobPostingAndNotes(AppDAO appDAO) {
 
-		int theId = 10;
+		// create a job posting
+		JobPosting tempJobPosting = new JobPosting("Pacman - How To Score One Million Points");
 
-		System.out.println("Deleting course id: " + theId);
+		// add some notes
+		tempJobPosting.addNote(new Note("Great job posting ... loved it!"));
+		tempJobPosting.addNote(new Note("Cool job posting, job well done."));
+		tempJobPosting.addNote(new Note("What a dumb job posting, you are an idiot!"));
 
-		appDAO.deleteCourseById(theId);
+		// save the job posting ... and leverage the cascade all
+		System.out.println("Saving the job posting");
+		System.out.println(tempJobPosting);
+		System.out.println(tempJobPosting.getNotes());
+
+		appDAO.save(tempJobPosting);
 
 		System.out.println("Done!");
 	}
 
-	private void updateCourse(AppDAO appDAO) {
+	private void deleteJobPosting(AppDAO appDAO) {
 
 		int theId = 10;
 
-		// find the course
-		System.out.println("Finding course id: " + theId);
-		Course tempCourse = appDAO.findCourseById(theId);
+		System.out.println("Deleting job posting id: " + theId);
 
-		// update the course
-		System.out.println("Updating course id: " + theId);
-		tempCourse.setTitle("Enjoy the Simple Things");
-
-		appDAO.update(tempCourse);
+		appDAO.deleteJobPostingById(theId);
 
 		System.out.println("Done!");
 	}
 
-	private void updateInstructor(AppDAO appDAO) {
+	private void updateJobPosting(AppDAO appDAO) {
+
+		int theId = 10;
+
+		// find the job posting
+		System.out.println("Finding job posting id: " + theId);
+		JobPosting tempJobPosting = appDAO.findJobPostingById(theId);
+
+		// update the job posting
+		System.out.println("Updating job posting id: " + theId);
+		tempJobPosting.setTitle("Enjoy the Simple Things");
+
+		appDAO.update(tempJobPosting);
+
+		System.out.println("Done!");
+	}
+
+	private void updateRecruiter(AppDAO appDAO) {
 
 		int theId = 1;
 
-		// find the instructor
-		System.out.println("Finding instructor id: " + theId);
-		Instructor tempInstructor = appDAO.findInstructorById(theId);
+		// find the recruiter
+		System.out.println("Finding recruiter id: " + theId);
+		Recruiter tempRecruiter = appDAO.findRecruiterById(theId);
 
-		// update the instructor
-		System.out.println("Updating instructor id: " + theId);
-		tempInstructor.setLastName("TESTER");
+		// update the recruiter
+		System.out.println("Updating recruiter id: " + theId);
+		tempRecruiter.setLastName("TESTER");
 
-		appDAO.update(tempInstructor);
-
-		System.out.println("Done!");
-	}
-
-	private void findInstructorWithCoursesJoinFetch(AppDAO appDAO) {
-
-		int theId = 1;
-
-		// find the instructor
-		System.out.println("Finding instructor id: " + theId);
-		Instructor tempInstructor = appDAO.findInstructorByIdJoinFetch(theId);
-
-		System.out.println("tempInstructor: " + tempInstructor);
-		System.out.println("the associated courses: " + tempInstructor.getCourses());
+		appDAO.update(tempRecruiter);
 
 		System.out.println("Done!");
 	}
 
-	private void findCoursesForInstructor(AppDAO appDAO) {
+	private void findRecruiterWithJobPostingsJoinFetch(AppDAO appDAO) {
 
 		int theId = 1;
-		// find instructor
-		System.out.println("Finding instructor id: " + theId);
 
-		Instructor tempInstructor = appDAO.findInstructorById(theId);
+		// find the recruiter
+		System.out.println("Finding recruiter id: " + theId);
+		Recruiter tempRecruiter = appDAO.findRecruiterByIdJoinFetch(theId);
 
-		System.out.println("tempInstructor: " + tempInstructor);
+		System.out.println("tempRecruiter: " + tempRecruiter);
+		System.out.println("the associated jobPostings: " + tempRecruiter.getJobPostings());
 
-		// find courses for instructor
-		System.out.println("Finding courses for instructor id: " + theId);
-		List<Course> courses = appDAO.findCoursesByInstructorId(theId);
+		System.out.println("Done!");
+	}
+
+	private void findJobPostingsForRecruiter(AppDAO appDAO) {
+
+		int theId = 1;
+		// find recruiter
+		System.out.println("Finding recruiter id: " + theId);
+
+		Recruiter tempRecruiter = appDAO.findRecruiterById(theId);
+
+		System.out.println("tempRecruiter: " + tempRecruiter);
+
+		// find jobPostings for recruiter
+		System.out.println("Finding jobPostings for recruiter id: " + theId);
+		List<JobPosting> jobPostings = appDAO.findJobPostingsByRecruiterId(theId);
 
 		// associate the objects
-		tempInstructor.setCourses(courses);
+		tempRecruiter.setJobPostings(jobPostings);
 
-		System.out.println("the associated courses: " + tempInstructor.getCourses());
+		System.out.println("the associated jobPostings: " + tempRecruiter.getJobPostings());
 
 		System.out.println("Done!");
 	}
 
-	private void findInstructorWithCourses(AppDAO appDAO) {
+	private void findRecruiterWithJobPostings(AppDAO appDAO) {
 
 		int theId = 1;
-		System.out.println("Finding instructor id: " + theId);
+		System.out.println("Finding recruiter id: " + theId);
 
-		Instructor tempInstructor = appDAO.findInstructorById(theId);
+		Recruiter tempRecruiter = appDAO.findRecruiterById(theId);
 
-		System.out.println("tempInstructor: " + tempInstructor);
-		System.out.println("the associated courses: " + tempInstructor.getCourses());
+		System.out.println("tempRecruiter: " + tempRecruiter);
+		System.out.println("the associated jobPostings: " + tempRecruiter.getJobPostings());
 
 		System.out.println("Done!");
 	}
 
-	private void createInstructorWithCourses(AppDAO appDAO) {
+	private void createRecruiterWithJobPostings(AppDAO appDAO) {
 
-		// create the instructor
-		Instructor tempInstructor =
-				new Instructor("Susan", "Public", "susan.public@resistance.com");
+		// create the recruiter
+		Recruiter tempRecruiter =
+				new Recruiter("Susan", "Public", "susan.public@resistance.com");
 
-		// create the instructor detail
-		InstructorDetail tempInstructorDetail =
-				new InstructorDetail(
+		// create the recruiter detail
+		RecruiterDetail tempRecruiterDetail =
+				new RecruiterDetail(
 						"http://www.youtube.com",
 						"Video Games");
 
 		// associate the objects
-		tempInstructor.setInstructorDetail(tempInstructorDetail);
+		tempRecruiter.setRecruiterDetail(tempRecruiterDetail);
 
-		// create some courses
-		Course tempCourse1 = new Course("Air Guitar - The Ultimate Guide");
-		Course tempCourse2 = new Course("The Pinball Masterclass");
+		// create some jobPostings
+		JobPosting tempJobPosting1 = new JobPosting("Air Guitar - The Ultimate Guide");
+		JobPosting tempJobPosting2 = new JobPosting("The Pinball Masterclass");
 
-		// add courses to instructor
-		tempInstructor.add(tempCourse1);
-		tempInstructor.add(tempCourse2);
+		// add jobPostings to recruiter
+		tempRecruiter.add(tempJobPosting1);
+		tempRecruiter.add(tempJobPosting2);
 
-		// save the instructor
+		// save the recruiter
 		//
-		// NOTE: this will ALSO save the courses
+		// NOTE: this will ALSO save the jobPostings
 		// because of CascadeType.PERSIST
 		//
-		System.out.println("Saving instructor: " + tempInstructor);
-		System.out.println("The courses: " + tempInstructor.getCourses());
-		appDAO.save(tempInstructor);
+		System.out.println("Saving recruiter: " + tempRecruiter);
+		System.out.println("The jobPostings: " + tempRecruiter.getJobPostings());
+		appDAO.save(tempRecruiter);
 
 		System.out.println("Done!");
 	}
 
-	private void deleteInstructorDetail(AppDAO appDAO) {
+	private void deleteRecruiterDetail(AppDAO appDAO) {
 
 		int theId = 3;
-		System.out.println("Deleting instructor detail id: " + theId);
+		System.out.println("Deleting recruiter detail id: " + theId);
 
-		appDAO.deleteInstructorDetailById(theId);
+		appDAO.deleteRecruiterDetailById(theId);
 
 		System.out.println("Done!");
 	}
 
-	private void findInstructorDetail(AppDAO appDAO) {
+	private void findRecruiterDetail(AppDAO appDAO) {
 
-		// get the instructor detail object
+		// get the recruiter detail object
 		int theId = 2;
-		InstructorDetail tempInstructorDetail = appDAO.findInstructorDetailById(theId);
+		RecruiterDetail tempRecruiterDetail = appDAO.findRecruiterDetailById(theId);
 
-		// print the instructor detail
-		System.out.println("tempInstructorDetail: " + tempInstructorDetail);
+		// print the recruiter detail
+		System.out.println("tempRecruiterDetail: " + tempRecruiterDetail);
 
-		// print the associated instructor
-		System.out.println("the associated instructor: " + tempInstructorDetail.getInstructor());
+		// print the associated recruiter
+		System.out.println("the associated recruiter: " + tempRecruiterDetail.getRecruiter());
 
 		System.out.println("Done!");
 	}
 
-	private void deleteInstructor(AppDAO appDAO) {
+	private void deleteRecruiter(AppDAO appDAO) {
 
 		int theId = 1;
-		System.out.println("Deleting instructor id: " + theId);
+		System.out.println("Deleting recruiter id: " + theId);
 
-		appDAO.deleteInstructorById(theId);
+		appDAO.deleteRecruiterById(theId);
 
 		System.out.println("Done!");
 	}
 
-	private void findInstructor(AppDAO appDAO) {
+	private void findRecruiter(AppDAO appDAO) {
 
 		int theId = 2;
-		System.out.println("Finding instructor id: " + theId);
+		System.out.println("Finding recruiter id: " + theId);
 
-		Instructor tempInstructor = appDAO.findInstructorById(theId);
+		Recruiter tempRecruiter = appDAO.findRecruiterById(theId);
 
-		System.out.println("tempInstructor: " + tempInstructor);
-		System.out.println("the associated instructorDetail only: " + tempInstructor.getInstructorDetail());
+		System.out.println("tempRecruiter: " + tempRecruiter);
+		System.out.println("the associated recruiterDetail only: " + tempRecruiter.getRecruiterDetail());
 
 	}
 
-	private void createInstructor(AppDAO appDAO) {
+	private void createRecruiter(AppDAO appDAO) {
 
 		/*
-		// create the instructor
-		Instructor tempInstructor =
-				new Instructor("Chad", "Darby", "darby@resistance.com");
+		// create the recruiter
+		Recruiter tempRecruiter =
+				new Recruiter("Chad", "Darby", "darby@resistance.com");
 
-		// create the instructor detail
-		InstructorDetail tempInstructorDetail =
-				new InstructorDetail(
+		// create the recruiter detail
+		RecruiterDetail tempRecruiterDetail =
+				new RecruiterDetail(
 						"http://www.resistance.com/youtube",
 						"Luv 2 code!!!");
 		*/
 
-		// create the instructor
-		Instructor tempInstructor =
-				new Instructor("Madhu", "Patel", "madhu@resistance.com");
+		// create the recruiter
+		Recruiter tempRecruiter =
+				new Recruiter("Madhu", "Patel", "madhu@resistance.com");
 
-		// create the instructor detail
-		InstructorDetail tempInstructorDetail =
-				new InstructorDetail(
+		// create the recruiter detail
+		RecruiterDetail tempRecruiterDetail =
+				new RecruiterDetail(
 						"http://www.resistance.com/youtube",
 						"Guitar");
 
 		// associate the objects
-		tempInstructor.setInstructorDetail(tempInstructorDetail);
+		tempRecruiter.setRecruiterDetail(tempRecruiterDetail);
 
-		// save the instructor
+		// save the recruiter
 		//
 		// NOTE: this will ALSO save the details object
 		// because of CascadeType.ALL
 		//
-		System.out.println("Saving instructor: " + tempInstructor);
-		appDAO.save(tempInstructor);
+		System.out.println("Saving recruiter: " + tempRecruiter);
+		appDAO.save(tempRecruiter);
 
 		System.out.println("Done!");
 	}

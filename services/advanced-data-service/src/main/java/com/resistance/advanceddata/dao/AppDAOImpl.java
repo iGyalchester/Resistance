@@ -1,9 +1,9 @@
 package com.resistance.advanceddata.dao;
 
-import com.resistance.shared.models.advanced.Course;
-import com.resistance.shared.models.advanced.Instructor;
-import com.resistance.shared.models.advanced.InstructorDetail;
-import com.resistance.shared.models.advanced.Student;
+import com.resistance.shared.models.advanced.JobPosting;
+import com.resistance.shared.models.advanced.Recruiter;
+import com.resistance.shared.models.advanced.RecruiterDetail;
+import com.resistance.shared.models.advanced.Candidate;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,175 +26,175 @@ public class AppDAOImpl implements AppDAO {
 
     @Override
     @Transactional
-    public void save(Instructor theInstructor) {
-        entityManager.persist(theInstructor);
+    public void save(Recruiter theRecruiter) {
+        entityManager.persist(theRecruiter);
     }
 
     @Override
-    public Instructor findInstructorById(int theId) {
-        return entityManager.find(Instructor.class, theId);
+    public Recruiter findRecruiterById(int theId) {
+        return entityManager.find(Recruiter.class, theId);
     }
 
     @Override
     @Transactional
-    public void deleteInstructorById(int theId) {
+    public void deleteRecruiterById(int theId) {
 
-        // retrieve the instructor
-        Instructor tempInstructor = entityManager.find(Instructor.class, theId);
+        // retrieve the recruiter
+        Recruiter tempRecruiter = entityManager.find(Recruiter.class, theId);
 
-        // get the courses
-        List<Course> courses = tempInstructor.getCourses();
+        // get the jobPostings
+        List<JobPosting> jobPostings = tempRecruiter.getJobPostings();
 
-        // break association of all courses for the instructor
-        for (Course tempCourse : courses) {
-            tempCourse.setInstructor(null);
+        // break association of all jobPostings for the recruiter
+        for (JobPosting tempJobPosting : jobPostings) {
+            tempJobPosting.setRecruiter(null);
         }
 
-        // delete the instructor
-        entityManager.remove(tempInstructor);
+        // delete the recruiter
+        entityManager.remove(tempRecruiter);
     }
 
     @Override
-    public InstructorDetail findInstructorDetailById(int theId) {
-        return entityManager.find(InstructorDetail.class, theId);
+    public RecruiterDetail findRecruiterDetailById(int theId) {
+        return entityManager.find(RecruiterDetail.class, theId);
     }
 
     @Override
     @Transactional
-    public void deleteInstructorDetailById(int theId) {
+    public void deleteRecruiterDetailById(int theId) {
 
-        // retrieve instructor detail
-        InstructorDetail tempInstructorDetail = entityManager.find(InstructorDetail.class, theId);
+        // retrieve recruiter detail
+        RecruiterDetail tempRecruiterDetail = entityManager.find(RecruiterDetail.class, theId);
 
         // remove the associated object reference
         // break bi-directional link
         //
-        tempInstructorDetail.getInstructor().setInstructorDetail(null);
+        tempRecruiterDetail.getRecruiter().setRecruiterDetail(null);
 
-        // delete the instructor detail
-        entityManager.remove(tempInstructorDetail);
+        // delete the recruiter detail
+        entityManager.remove(tempRecruiterDetail);
     }
 
     @Override
-    public List<Course> findCoursesByInstructorId(int theId) {
+    public List<JobPosting> findJobPostingsByRecruiterId(int theId) {
 
         // create query
-        TypedQuery<Course> query = entityManager.createQuery(
-                                    "from Course where instructor.id = :data", Course.class);
+        TypedQuery<JobPosting> query = entityManager.createQuery(
+                                    "from JobPosting where recruiter.id = :data", JobPosting.class);
         query.setParameter("data", theId);
 
         // execute query
-        List<Course> courses = query.getResultList();
+        List<JobPosting> jobPostings = query.getResultList();
 
-        return courses;
+        return jobPostings;
     }
 
     @Override
-    public Instructor findInstructorByIdJoinFetch(int theId) {
+    public Recruiter findRecruiterByIdJoinFetch(int theId) {
 
         // create query
-        TypedQuery<Instructor> query = entityManager.createQuery(
-                                                "select i from Instructor i "
-                                                    + "JOIN FETCH i.courses "
-                                                    + "JOIN FETCH i.instructorDetail "
-                                                    + "where i.id = :data", Instructor.class);
+        TypedQuery<Recruiter> query = entityManager.createQuery(
+                                                "select i from Recruiter i "
+                                                    + "JOIN FETCH i.jobPostings "
+                                                    + "JOIN FETCH i.recruiterDetail "
+                                                    + "where i.id = :data", Recruiter.class);
         query.setParameter("data", theId);
 
         // execute query
-        Instructor instructor = query.getSingleResult();
+        Recruiter recruiter = query.getSingleResult();
 
-        return instructor;
+        return recruiter;
     }
 
     @Override
     @Transactional
-    public void update(Instructor tempInstructor) {
-        entityManager.merge(tempInstructor);
+    public void update(Recruiter tempRecruiter) {
+        entityManager.merge(tempRecruiter);
     }
 
     @Override
     @Transactional
-    public void update(Course tempCourse) {
-        entityManager.merge(tempCourse);
+    public void update(JobPosting tempJobPosting) {
+        entityManager.merge(tempJobPosting);
     }
 
     @Override
-    public Course findCourseById(int theId) {
-        return entityManager.find(Course.class, theId);
-    }
-
-    @Override
-    @Transactional
-    public void deleteCourseById(int theId) {
-
-        // retrieve the course
-        Course tempCourse = entityManager.find(Course.class, theId);
-
-        // delete the course
-        entityManager.remove(tempCourse);
+    public JobPosting findJobPostingById(int theId) {
+        return entityManager.find(JobPosting.class, theId);
     }
 
     @Override
     @Transactional
-    public void save(Course theCourse) {
-        entityManager.persist(theCourse);
+    public void deleteJobPostingById(int theId) {
+
+        // retrieve the job posting
+        JobPosting tempJobPosting = entityManager.find(JobPosting.class, theId);
+
+        // delete the job posting
+        entityManager.remove(tempJobPosting);
     }
 
     @Override
-    public Course findCourseAndReviewsByCourseId(int theId) {
+    @Transactional
+    public void save(JobPosting theJobPosting) {
+        entityManager.persist(theJobPosting);
+    }
+
+    @Override
+    public JobPosting findJobPostingAndNotesByJobPostingId(int theId) {
 
         // create query
-        TypedQuery<Course> query = entityManager.createQuery(
-                "select c from Course c "
-                + "JOIN FETCH c.reviews "
-                + "where c.id = :data", Course.class);
+        TypedQuery<JobPosting> query = entityManager.createQuery(
+                "select c from JobPosting c "
+                + "JOIN FETCH c.notes "
+                + "where c.id = :data", JobPosting.class);
 
         query.setParameter("data", theId);
 
         // execute query
-        Course course = query.getSingleResult();
+        JobPosting jobPosting = query.getSingleResult();
 
-        return course;
+        return jobPosting;
     }
 
     @Override
-    public Course findCourseAndStudentsByCourseId(int theId) {
+    public JobPosting findJobPostingAndCandidatesByJobPostingId(int theId) {
 
         // create query
-        TypedQuery<Course> query = entityManager.createQuery(
-                "select c from Course c "
-                        + "JOIN FETCH c.students "
-                        + "where c.id = :data", Course.class);
+        TypedQuery<JobPosting> query = entityManager.createQuery(
+                "select c from JobPosting c "
+                        + "JOIN FETCH c.candidates "
+                        + "where c.id = :data", JobPosting.class);
 
         query.setParameter("data", theId);
 
         // execute query
-        Course course = query.getSingleResult();
+        JobPosting jobPosting = query.getSingleResult();
 
-        return course;
+        return jobPosting;
     }
 
     @Override
-    public Student findStudentAndCoursesByStudentId(int theId) {
+    public Candidate findCandidateAndJobPostingsByCandidateId(int theId) {
 
         // create query
-        TypedQuery<Student> query = entityManager.createQuery(
-                "select s from Student s "
-                        + "JOIN FETCH s.courses "
-                        + "where s.id = :data", Student.class);
+        TypedQuery<Candidate> query = entityManager.createQuery(
+                "select s from Candidate s "
+                        + "JOIN FETCH s.jobPostings "
+                        + "where s.id = :data", Candidate.class);
 
         query.setParameter("data", theId);
 
         // execute query
-        Student student = query.getSingleResult();
+        Candidate candidate = query.getSingleResult();
 
-        return student;
+        return candidate;
     }
 
     @Override
     @Transactional
-    public void update(Student tempStudent) {
-        entityManager.merge(tempStudent);
+    public void update(Candidate tempCandidate) {
+        entityManager.merge(tempCandidate);
     }
 }
 

@@ -1,0 +1,8 @@
+company_name,position_title,status
+Acme Corp,Backend Engineer,applied
+Globex,Data Engineer,SCREENING
+Initech,Java Developer,interview
+Umbrella Labs,Platform Engineer,offer
+Stark Industries,Software Engineer,rejected
+,Missing Company,applied
+Hooli,QA Engineer,not-a-status

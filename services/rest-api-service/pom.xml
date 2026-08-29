@@ -10,7 +10,7 @@
 	</parent>
 	<artifactId>rest-api-service</artifactId>
 	<name>rest-api-service</name>
-	<description>REST CRUD API for the employee directory</description>
+	<description>REST CRUD API for tracked job applications</description>
 
 	<dependencies>
 		<dependency>

@@ -1,45 +1,45 @@
 package com.resistance.advanceddata.dao;
 
-import com.resistance.shared.models.advanced.Course;
-import com.resistance.shared.models.advanced.Instructor;
-import com.resistance.shared.models.advanced.InstructorDetail;
-import com.resistance.shared.models.advanced.Student;
+import com.resistance.shared.models.advanced.JobPosting;
+import com.resistance.shared.models.advanced.Recruiter;
+import com.resistance.shared.models.advanced.RecruiterDetail;
+import com.resistance.shared.models.advanced.Candidate;
 
 import java.util.List;
 
 public interface AppDAO {
 
-    void save(Instructor theInstructor);
+    void save(Recruiter theRecruiter);
 
-    Instructor findInstructorById(int theId);
+    Recruiter findRecruiterById(int theId);
 
-    void deleteInstructorById(int theId);
+    void deleteRecruiterById(int theId);
 
-    InstructorDetail findInstructorDetailById(int theId);
+    RecruiterDetail findRecruiterDetailById(int theId);
 
-    void deleteInstructorDetailById(int theId);
+    void deleteRecruiterDetailById(int theId);
 
-    List<Course> findCoursesByInstructorId(int theId);
+    List<JobPosting> findJobPostingsByRecruiterId(int theId);
 
-    Instructor findInstructorByIdJoinFetch(int theId);
+    Recruiter findRecruiterByIdJoinFetch(int theId);
 
-    void update(Instructor tempInstructor);
+    void update(Recruiter tempRecruiter);
 
-    void update(Course tempCourse);
+    void update(JobPosting tempJobPosting);
 
-    Course findCourseById(int theId);
+    JobPosting findJobPostingById(int theId);
 
-    void deleteCourseById(int theId);
+    void deleteJobPostingById(int theId);
 
-    void save(Course theCourse);
+    void save(JobPosting theJobPosting);
 
-    Course findCourseAndReviewsByCourseId(int theId);
+    JobPosting findJobPostingAndNotesByJobPostingId(int theId);
 
-    Course findCourseAndStudentsByCourseId(int theId);
+    JobPosting findJobPostingAndCandidatesByJobPostingId(int theId);
 
-    Student findStudentAndCoursesByStudentId(int theId);
+    Candidate findCandidateAndJobPostingsByCandidateId(int theId);
 
-    void update(Student tempStudent);
+    void update(Candidate tempCandidate);
 }
 
 

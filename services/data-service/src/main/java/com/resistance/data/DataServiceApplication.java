@@ -1,7 +1,7 @@
 package com.resistance.data;
 
-import com.resistance.data.dao.StudentDAO;
-import com.resistance.shared.models.entity.Student;
+import com.resistance.data.dao.ContactDAO;
+import com.resistance.shared.models.entity.Contact;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -19,130 +19,130 @@ public class DataServiceApplication {
 	}
 
 	@Bean
-	public CommandLineRunner commandLineRunner(StudentDAO studentDAO) {
+	public CommandLineRunner commandLineRunner(ContactDAO contactDAO) {
 
 		return runner -> {
-			// createStudent(studentDAO);
+			// createContact(contactDAO);
 
-			createMultipleStudents(studentDAO);
+			createMultipleContacts(contactDAO);
 
-			// readStudent(studentDAO);
+			// readContact(contactDAO);
 
-			// queryForStudents(studentDAO);
+			// queryForContacts(contactDAO);
 
-			// queryForStudentsByLastName(studentDAO);
+			// queryForContactsByLastName(contactDAO);
 
-			// updateStudent(studentDAO);
+			// updateContact(contactDAO);
 
-			// deleteStudent(studentDAO);
+			// deleteContact(contactDAO);
 
-			// deleteAllStudents(studentDAO);
+			// deleteAllContacts(contactDAO);
 		};
 	}
 
-	private void deleteAllStudents(StudentDAO studentDAO) {
+	private void deleteAllContacts(ContactDAO contactDAO) {
 
-		System.out.println("Deleting all students");
-		int numRowsDeleted = studentDAO.deleteAll();
+		System.out.println("Deleting all contacts");
+		int numRowsDeleted = contactDAO.deleteAll();
 		System.out.println("Deleted row count: " + numRowsDeleted);
 	}
 
-	private void deleteStudent(StudentDAO studentDAO) {
+	private void deleteContact(ContactDAO contactDAO) {
 
-		int studentId = 3;
-		System.out.println("Deleting student id: " + studentId);
-		studentDAO.delete(studentId);
+		int contactId = 3;
+		System.out.println("Deleting contact id: " + contactId);
+		contactDAO.delete(contactId);
 	}
 
-	private void updateStudent(StudentDAO studentDAO) {
+	private void updateContact(ContactDAO contactDAO) {
 
-		// retrieve student based on the id: primary key
-		int studentId = 1;
-		System.out.println("Getting student with id: " + studentId);
-		Student myStudent = studentDAO.findById(studentId);
+		// retrieve contact based on the id: primary key
+		int contactId = 1;
+		System.out.println("Getting contact with id: " + contactId);
+		Contact myContact = contactDAO.findById(contactId);
 
 		// change first name to "John"
-		System.out.println("Updating student ...");
-		myStudent.setFirstName("John");
+		System.out.println("Updating contact ...");
+		myContact.setFirstName("John");
 
-		// update the student
-		studentDAO.update(myStudent);
+		// update the contact
+		contactDAO.update(myContact);
 
-		// display the updated student
-		System.out.println("Updated student: " + myStudent);
+		// display the updated contact
+		System.out.println("Updated contact: " + myContact);
 	}
 
-	private void queryForStudentsByLastName(StudentDAO studentDAO) {
+	private void queryForContactsByLastName(ContactDAO contactDAO) {
 
-		// get a list of students
-		List<Student> theStudents = studentDAO.findByLastName("Doe");
+		// get a list of contacts
+		List<Contact> theContacts = contactDAO.findByLastName("Doe");
 
-		// display list of students
-		for (Student tempStudent : theStudents) {
-			System.out.println(tempStudent);
+		// display list of contacts
+		for (Contact tempContact : theContacts) {
+			System.out.println(tempContact);
 		}
 	}
 
-	private void queryForStudents(StudentDAO studentDAO) {
+	private void queryForContacts(ContactDAO contactDAO) {
 
-		// get a list of students
-		List<Student> theStudents = studentDAO.findAll();
+		// get a list of contacts
+		List<Contact> theContacts = contactDAO.findAll();
 
-		// display list of students
-		for (Student tempStudent : theStudents) {
-			System.out.println(tempStudent);
+		// display list of contacts
+		for (Contact tempContact : theContacts) {
+			System.out.println(tempContact);
 		}
 	}
 
-	private void readStudent(StudentDAO studentDAO) {
+	private void readContact(ContactDAO contactDAO) {
 
-		// create  a student object
-		System.out.println("Creating new student object ...");
-		Student tempStudent = new Student("Daffy", "Duck", "daffy@resistance.com");
+		// create  a contact object
+		System.out.println("Creating new contact object ...");
+		Contact tempContact = new Contact("Daffy", "Duck", "daffy@resistance.com");
 
-		// save the student
-		System.out.println("Saving the student ...");
-		studentDAO.save(tempStudent);
+		// save the contact
+		System.out.println("Saving the contact ...");
+		contactDAO.save(tempContact);
 
-		// display id of the saved student
-		int theId = tempStudent.getId();
-		System.out.println("Saved student. Generated id: " + theId);
+		// display id of the saved contact
+		int theId = tempContact.getId();
+		System.out.println("Saved contact. Generated id: " + theId);
 
-		// retrieve student based on the id: primary key
-		System.out.println("Retrieving student with id: " + theId);
-		Student myStudent = studentDAO.findById(theId);
+		// retrieve contact based on the id: primary key
+		System.out.println("Retrieving contact with id: " + theId);
+		Contact myContact = contactDAO.findById(theId);
 
-		// display student
-		System.out.println("Found the student: " + myStudent);
+		// display contact
+		System.out.println("Found the contact: " + myContact);
 	}
 
-	private void createMultipleStudents(StudentDAO studentDAO) {
+	private void createMultipleContacts(ContactDAO contactDAO) {
 
-		// create multiple students
-		System.out.println("Creating 3 student objects ...");
-		Student tempStudent1 = new Student("John", "Doe", "john@resistance.com");
-		Student tempStudent2 = new Student("Mary", "Public", "mary@resistance.com");
-		Student tempStudent3 = new Student("Bonita", "Applebum", "bonita@resistance.com");
+		// create multiple contacts
+		System.out.println("Creating 3 contact objects ...");
+		Contact tempContact1 = new Contact("John", "Doe", "john@resistance.com");
+		Contact tempContact2 = new Contact("Mary", "Public", "mary@resistance.com");
+		Contact tempContact3 = new Contact("Bonita", "Applebum", "bonita@resistance.com");
 
-		// save the student objects
-		System.out.println("Saving the students ...");
-		studentDAO.save(tempStudent1);
-		studentDAO.save(tempStudent2);
-		studentDAO.save(tempStudent3);
+		// save the contact objects
+		System.out.println("Saving the contacts ...");
+		contactDAO.save(tempContact1);
+		contactDAO.save(tempContact2);
+		contactDAO.save(tempContact3);
 	}
 
-	private void createStudent(StudentDAO studentDAO) {
+	private void createContact(ContactDAO contactDAO) {
 
-		// create the student object
-		System.out.println("Creating new student object ...");
-		Student tempStudent = new Student("Paul", "Doe", "paul@resistance.com");
+		// create the contact object
+		System.out.println("Creating new contact object ...");
+		Contact tempContact = new Contact("Paul", "Doe", "paul@resistance.com");
 
-		// save the student object
-		System.out.println("Saving the student ...");
-		studentDAO.save(tempStudent);
+		// save the contact object
+		System.out.println("Saving the contact ...");
+		contactDAO.save(tempContact);
 
-		// display id of the saved student
-		System.out.println("Saved student. Generated id: " + tempStudent.getId());
+		// display id of the saved contact
+		System.out.println("Saved contact. Generated id: " + tempContact.getId());
 	}
 }
 

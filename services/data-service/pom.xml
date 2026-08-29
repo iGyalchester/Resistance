@@ -10,7 +10,7 @@
 	</parent>
 	<artifactId>data-service</artifactId>
 	<name>data-service</name>
-	<description>JPA/Hibernate CRUD command-line demo (Student)</description>
+	<description>JPA/Hibernate CRUD command-line demo (Contact)</description>
 
 	<dependencies>
 		<dependency>

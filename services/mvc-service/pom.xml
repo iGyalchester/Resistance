@@ -10,7 +10,7 @@
 	</parent>
 	<artifactId>mvc-service</artifactId>
 	<name>mvc-service</name>
-	<description>Spring MVC + Thymeleaf employee CRUD and validated customer form</description>
+	<description>Spring MVC + Thymeleaf job application CRUD and validated applicant form</description>
 
 	<dependencies>
 		<dependency>

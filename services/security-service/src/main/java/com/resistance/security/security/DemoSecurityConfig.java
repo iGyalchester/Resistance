@@ -38,11 +38,11 @@ public class DemoSecurityConfig {
 
         http.authorizeHttpRequests(configurer ->
                 configurer
-                        .requestMatchers(HttpMethod.GET, "/api/employees").hasRole("EMPLOYEE")
-                        .requestMatchers(HttpMethod.GET, "/api/employees/**").hasRole("EMPLOYEE")
-                        .requestMatchers(HttpMethod.POST, "/api/employees").hasRole("MANAGER")
-                        .requestMatchers(HttpMethod.PUT, "/api/employees").hasRole("MANAGER")
-                        .requestMatchers(HttpMethod.DELETE, "/api/employees/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/applications").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/applications/**").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/applications").hasRole("MANAGER")
+                        .requestMatchers(HttpMethod.PUT, "/api/applications").hasRole("MANAGER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/applications/**").hasRole("ADMIN")
         );
 
         // use HTTP Basic authentication
@@ -63,19 +63,19 @@ public class DemoSecurityConfig {
         UserDetails john = User.builder()
                 .username("john")
                 .password("{noop}test123")
-                .roles("EMPLOYEE")
+                .roles("USER")
                 .build();
 
         UserDetails mary = User.builder()
                 .username("mary")
                 .password("{noop}test123")
-                .roles("EMPLOYEE", "MANAGER")
+                .roles("USER", "MANAGER")
                 .build();
 
         UserDetails susan = User.builder()
                 .username("susan")
                 .password("{noop}test123")
-                .roles("EMPLOYEE", "MANAGER", "ADMIN")
+                .roles("USER", "MANAGER", "ADMIN")
                 .build();
 
         return new InMemoryUserDetailsManager(john, mary, susan);

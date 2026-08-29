@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Maps a leading path segment to a downstream base URL, e.g.
  * gateway.routes.rest-api=http://localhost:8083 makes
- * GET /rest-api/api/employees proxy to http://localhost:8083/api/employees.
+ * GET /rest-api/api/applications proxy to http://localhost:8083/api/applications.
  */
 @ConfigurationProperties(prefix = "gateway")
 public class GatewayRoutesProperties {

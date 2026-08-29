@@ -1,6 +1,6 @@
 package com.resistance.etl.runner;
 
-import com.resistance.etl.runner.job.EmployeeCsvImportJob;
+import com.resistance.etl.runner.job.JobApplicationCsvImportJob;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -16,7 +16,7 @@ public class EtlRunnerApplication {
     }
 
     @Bean
-    public CommandLineRunner runEtl(EmployeeCsvImportJob employeeCsvImportJob) {
-        return args -> employeeCsvImportJob.run();
+    public CommandLineRunner runEtl(JobApplicationCsvImportJob applicationCsvImportJob) {
+        return args -> applicationCsvImportJob.run();
     }
 }

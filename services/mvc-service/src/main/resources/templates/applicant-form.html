@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Applicant Registration Form</title>
+
+    <style>
+        .error {color:red}
+    </style>
+</head>
+
+<body>
+<i>Fill out the form. Asterisk (*) means required.</i>
+<br><br>
+<form th:action="@{/processForm}" th:object="${applicant}" method="POST">
+
+    First name: <input type="text" th:field="*{firstName}" />
+
+    <br><br>
+
+    Last name (*): <input type="text" th:field="*{lastName}" />
+
+    <!-- Add error message (if present) -->
+    <span th:if="${#fields.hasErrors('lastName')}"
+          th:errors="*{lastName}"
+          class="error"></span>
+
+    <br><br>
+
+    Years of experience: <input type="text" th:field="*{yearsExperience}" />
+
+    <!-- Add error message (if present) -->
+    <span th:if="${#fields.hasErrors('yearsExperience')}"
+          th:errors="*{yearsExperience}"
+          class="error"></span>
+
+    <br><br>
+
+    Postal Code: <input type="text" th:field="*{postalCode}" />
+
+    <!-- Add error message (if present) -->
+    <span th:if="${#fields.hasErrors('postalCode')}"
+          th:errors="*{postalCode}"
+          class="error"></span>
+
+    <br><br>
+
+    Referral Code: <input type="text" th:field="*{referralCode}" />
+
+    <!-- Add error message (if present) -->
+    <span th:if="${#fields.hasErrors('referralCode')}"
+          th:errors="*{referralCode}"
+          class="error"></span>
+
+    <br><br>
+
+    <input type="submit" value="Submit" />
+
+</form>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

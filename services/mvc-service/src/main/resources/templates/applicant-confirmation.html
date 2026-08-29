@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Applicant Confirmation</title>
+</head>
+<body>
+
+The applicant is confirmed: <span th:text="${applicant.firstName + ' ' + applicant.lastName}" />
+
+<br><br>
+
+Years of experience: <span th:text="${applicant.yearsExperience}" />
+
+<br><br>
+
+Postal code: <span th:text="${applicant.postalCode}" />
+
+<br><br>
+
+Course code: <span th:text="${applicant.referralCode}" />
+
+
+</body>
+</html>
