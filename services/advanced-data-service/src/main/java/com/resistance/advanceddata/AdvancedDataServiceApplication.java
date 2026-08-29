@@ -40,8 +40,8 @@ public class AdvancedDataServiceApplication {
 		Candidate tempCandidate = appDAO.findCandidateAndJobPostingsByCandidateId(theId);
 
 		// create more jobPostings
-		JobPosting tempJobPosting1 = new JobPosting("Rubik's Cube - How to Speed Cube");
-		JobPosting tempJobPosting2 = new JobPosting("Atari 2600 - Game Development");
+		JobPosting tempJobPosting1 = new JobPosting("Backend Engineer - Payments Team");
+		JobPosting tempJobPosting2 = new JobPosting("Data Engineer - Analytics");
 
 		// add jobPostings to candidate
 		tempCandidate.addJobPosting(tempJobPosting1);
@@ -80,7 +80,7 @@ public class AdvancedDataServiceApplication {
 	private void createJobPostingAndCandidates(AppDAO appDAO) {
 
 		// create a job posting
-		JobPosting tempJobPosting = new JobPosting("Pacman - How To Score One Million Points");
+		JobPosting tempJobPosting = new JobPosting("Software Engineer - Core Services");
 
 		// create the candidates
 		Candidate tempCandidate1 = new Candidate("John", "Doe", "john@resistance.com");
@@ -117,7 +117,7 @@ public class AdvancedDataServiceApplication {
 	private void createJobPostingAndNotes(AppDAO appDAO) {
 
 		// create a job posting
-		JobPosting tempJobPosting = new JobPosting("Pacman - How To Score One Million Points");
+		JobPosting tempJobPosting = new JobPosting("Software Engineer - Core Services");
 
 		// add some notes
 		tempJobPosting.addNote(new Note("Great job posting ... loved it!"));
@@ -155,7 +155,7 @@ public class AdvancedDataServiceApplication {
 
 		// update the job posting
 		System.out.println("Updating job posting id: " + theId);
-		tempJobPosting.setTitle("Enjoy the Simple Things");
+		tempJobPosting.setTitle("Senior Software Engineer - Core Services");
 
 		appDAO.update(tempJobPosting);
 
@@ -244,8 +244,8 @@ public class AdvancedDataServiceApplication {
 		tempRecruiter.setRecruiterDetail(tempRecruiterDetail);
 
 		// create some jobPostings
-		JobPosting tempJobPosting1 = new JobPosting("Air Guitar - The Ultimate Guide");
-		JobPosting tempJobPosting2 = new JobPosting("The Pinball Masterclass");
+		JobPosting tempJobPosting1 = new JobPosting("Platform Engineer - Infrastructure");
+		JobPosting tempJobPosting2 = new JobPosting("Site Reliability Engineer");
 
 		// add jobPostings to recruiter
 		tempRecruiter.add(tempJobPosting1);

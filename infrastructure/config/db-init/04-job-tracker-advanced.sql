@@ -90,3 +90,32 @@ CREATE TABLE `job_posting_candidate` (
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+--
+-- Seed data: the advanced-data-service demo runner expects candidate 2 to
+-- exist with at least one linked posting (its JOIN FETCH query returns no
+-- row otherwise). Titles are UNIQUE - keep these distinct from the titles
+-- the demo runner inserts.
+--
+
+INSERT INTO `recruiter_detail` VALUES
+	(1,'https://linkedin.com/in/susan-public','TalentWorks');
+
+INSERT INTO `recruiter` VALUES
+	(1,'Susan','Public','susan@talentworks.example',1);
+
+INSERT INTO `job_posting` VALUES
+	(10,'Java Developer - Distributed Systems',1),
+	(11,'QA Engineer - Automation',1);
+
+INSERT INTO `note` VALUES
+	(1,'Strong pipeline, moving fast on this one',10);
+
+INSERT INTO `candidate` VALUES
+	(1,'John','Doe','john@resistance.com'),
+	(2,'Mary','Public','mary@resistance.com');
+
+INSERT INTO `job_posting_candidate` VALUES
+	(10,1),
+	(10,2),
+	(11,2);
