@@ -39,6 +39,13 @@
                         th:text="${tempStatus}"></option>
             </select>
 
+            <select th:field="*{contact}" class="form-select mb-4 w-25">
+                <option value="">-- no contact --</option>
+                <option th:each="tempContact : ${contacts}"
+                        th:value="${tempContact.id}"
+                        th:text="${tempContact.firstName + ' ' + tempContact.lastName}"></option>
+            </select>
+
             <button type="submit" class="btn btn-info col-2">Save</button>
 
         </form>
