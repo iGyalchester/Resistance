@@ -2,13 +2,19 @@ name: Build
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ '**' ]
   pull_request:
+    branches: [ main, master ]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: "Build all modules"
+    name: "Build and test all modules"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
     - uses: actions/checkout@v6.0.2
@@ -20,7 +26,37 @@ jobs:
         distribution: 'temurin'
         cache: 'maven'
 
-    # Tests are skipped in CI because the service integration tests
-    # expect a local MySQL instance (see infrastructure/docker-compose.yml).
-    - name: Compile all modules
-      run: mvn -B clean compile
+    # The Spring context tests connect to a real MySQL, initialized with the
+    # same schemas/seeds as local dev (infrastructure/config/db-init).
+    - name: Start MySQL with tracker schemas
+      run: |
+        docker run -d --name mysql -p 3306:3306 \
+          -e MYSQL_ROOT_PASSWORD=root \
+          -v "$PWD/infrastructure/config/db-init:/docker-entrypoint-initdb.d:ro" \
+          mysql:9
+
+        echo "Waiting for MySQL and init scripts..."
+        for i in $(seq 1 60); do
+          if docker exec mysql mysql -h127.0.0.1 -uroot -proot -e "USE job_tracker" 2>/dev/null; then
+            echo "MySQL ready"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "MySQL did not become ready"
+        docker logs mysql
+        exit 1
+
+    - name: Build, test, and package all modules
+      run: mvn -B clean verify
+
+    - name: Upload boot jars
+      uses: actions/upload-artifact@v4
+      with:
+        name: boot-jars
+        path: |
+          services/*/target/*.jar
+          etl/etl-runner/target/*.jar
+          api-gateway/target/*.jar
+        if-no-files-found: error
+        retention-days: 7
