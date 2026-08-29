@@ -22,6 +22,8 @@ public class UserAccount {
     @Column(name="email", unique = true, nullable = false)
     private String email;
 
+    // PII: encrypted at rest when an encryption key is configured
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name="phone")
     private String phone;
 

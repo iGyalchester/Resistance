@@ -63,6 +63,50 @@ spring.mail.properties.mail.smtp.starttls.enable=true
 tracker.otp.from=no-reply@yourdomain.com
 ```
 
+## PII encryption with KMS keys
+
+QA/production encrypt PII columns (currently `user_account.phone`; annotate
+more fields with `@Convert(converter = EncryptedStringConverter.class)` to
+extend) using AES-256-GCM with a **KMS-managed data key**. The application
+never creates key material — you generate it once with KMS and inject it:
+
+```bash
+# one-time: create the customer-managed key
+aws kms create-key --description "resistance-tracker field encryption"
+
+# generate a 256-bit data key under it
+aws kms generate-data-key --key-id <key-id> --key-spec AES_256 \
+  --query Plaintext --output text          # base64 - this is TRACKER_ENC_KEY
+
+# store it in Secrets Manager rather than plain env files
+aws secretsmanager create-secret --name resistance/tracker-enc-key \
+  --secret-string '<base64-key>'
+```
+
+Inject the secret as `TRACKER_ENC_KEY` into intake-service and mvc-service
+(both read it as `tracker.encryption.key` in the qa profile). Values are
+written as `enc:v1:<base64(iv||ciphertext)>`; rows written before encryption
+was enabled still read back (plaintext passthrough on decrypt). Losing the
+key makes encrypted values unrecoverable — keep the KMS `CiphertextBlob`
+output of `generate-data-key` if you want to re-derive it via `kms decrypt`.
+
+## QA environment checklist
+
+QA runs with `--spring.profiles.active=qa`, which strips every local default:
+the services **fail at startup** until these exist in AWS and are injected
+as environment variables:
+
+| Variable | AWS resource | Used by |
+|---|---|---|
+| `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` | RDS/Aurora MySQL (run `infrastructure/config/db-init/` against it) | intake, mvc |
+| `INTAKE_WEBHOOK_TOKEN` | Secrets Manager secret | intake |
+| `INTAKE_AWS_TOPIC_ARN` | `ses-intake.yaml` stack output | intake |
+| `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `OTP_FROM_ADDRESS` | SES SMTP credentials + verified sender | mvc |
+| `TRACKER_ENC_KEY` | KMS data key (above) | intake, mvc |
+
+Dev needs none of this: no profile flag (dev is the default), local MySQL
+from docker-compose, logged OTP codes, open webhook, plaintext PII.
+
 ## Alternatives
 
 - **EventBridge**: route S3 `ObjectCreated` events from the raw-mail bucket

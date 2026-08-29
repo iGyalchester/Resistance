@@ -11,4 +11,12 @@
 	<artifactId>shared-utils</artifactId>
 	<name>shared-utils</name>
 	<description>General-purpose utilities and helpers</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
 </project>

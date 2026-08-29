@@ -132,6 +132,55 @@ SMTP configured the code is printed in the mvc-service log (dev mode); set
 `spring.mail.*` (any SMTP server, including AWS SES's) for real delivery. After
 login, `/dashboard` shows only your applications.
 
+## Environments: dev vs qa
+
+`intake-service` and `mvc-service` are profile-split:
+
+- **dev** (the default, no flag needed): everything local. MySQL from
+  docker-compose, OTP codes logged to the console, open intake webhook,
+  plaintext PII. Nothing external to set up.
+- **qa** (`--spring.profiles.active=qa`): everything on AWS, enforced. The
+  qa property files have no fallback values, so the services fail at startup
+  until RDS, the SES/SNS intake stack, SES SMTP credentials, the webhook
+  secret, and the KMS data key are provisioned and injected as environment
+  variables. The full checklist lives in `infrastructure/aws/README.md`.
+
+## Security
+
+What is actually in place today:
+
+- **Passwordless OTP login** (mvc-service): codes stored as SHA-256 hashes
+  only, 10-minute expiry, 5 attempts, one active code per account,
+  constant-time comparison, no account enumeration; `/dashboard` is
+  session-gated.
+- **Intake hardening**: the webhook requires an `X-Intake-Token` shared
+  secret and the SNS endpoint pins the topic ARN - both optional in dev,
+  mandatory in qa.
+- **PII encryption at rest**: AES-256-GCM via a JPA converter, keyed by an
+  AWS KMS-generated data key (`TRACKER_ENC_KEY`). Currently applied to
+  `user_account.phone`; extend by annotating fields with
+  `@Convert(converter = EncryptedStringConverter.class)`. Fields used as
+  lookup keys (account/contact email) stay plaintext for now - encrypting
+  them needs deterministic encryption or a hash column first.
+- **security-service / mvc-security-service**: the course-derived HTTP Basic
+  and form-login demos with JDBC users, roles and bcrypt.
+
+Known gaps, deliberately open in this phase: the admin-style `/applications`
+and `/contacts` pages and the REST API are unauthenticated (dev
+convenience); there is no TLS termination in-app (terminate at the ALB/
+gateway); DB credentials sit in dev property files (qa takes them from the
+environment).
+
+## Production database (decision pending)
+
+Dev/qa run MySQL (local container / RDS). If production moves to DynamoDB
+or MongoDB/DocumentDB: the per-service Spring Data repositories are the
+seam - DocumentDB is the smaller step (swap `spring-data-jpa` for
+`spring-data-mongodb`, entities keep their shape), while DynamoDB implies
+single-table modeling and rewriting the repository layer per service. The
+field-encryption converter is JPA-specific; its `FieldEncryptor` core in
+`shared-utils` is storage-agnostic and would carry over.
+
 ## ETL
 
 `etl-runner` imports job applications from CSV through the

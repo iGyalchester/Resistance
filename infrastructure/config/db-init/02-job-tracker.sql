@@ -15,7 +15,7 @@ CREATE TABLE `user_account` (
   `id` int NOT NULL AUTO_INCREMENT,
   `full_name` varchar(90) DEFAULT NULL,
   `email` varchar(120) NOT NULL,
-  `phone` varchar(30) DEFAULT NULL,
+  `phone` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `EMAIL_UNIQUE` (`email`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;

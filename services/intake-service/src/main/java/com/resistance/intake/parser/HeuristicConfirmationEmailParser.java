@@ -1,6 +1,7 @@
 package com.resistance.intake.parser;
 
 import com.resistance.intake.service.InboundEmail;
+import com.resistance.shared.models.entity.ApplicationStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -47,6 +48,33 @@ public class HeuristicConfirmationEmailParser implements ConfirmationEmailParser
     private static final Pattern FORWARDED_FROM = Pattern.compile(
             "^\\s*>?\\s*From:\\s*\"?(?<name>[^\"<\\n]*?)\"?\\s*<?(?<address>[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,})>?\\s*$",
             Pattern.MULTILINE);
+
+    // what the email means for the application's status; checked in order,
+    // most decisive first (rejections often also mention interviews)
+    private static final List<StatusSignal> STATUS_SIGNALS = List.of(
+            new StatusSignal(ApplicationStatus.REJECTED, Pattern.compile(
+                    "not (?:be )?(?:moving|going) forward|moving forward with other candidates"
+                            + "|(?:proceed|move forward) with other (?:candidates|applicants)"
+                            + "|will not be progressing|pursue other candidates"
+                            + "|position has been filled|unfortunately", F)),
+            new StatusSignal(ApplicationStatus.OFFER, Pattern.compile(
+                    "pleased to offer|excited to offer|extend (?:you )?an offer"
+                            + "|offer of employment|your offer letter", F)),
+            new StatusSignal(ApplicationStatus.INTERVIEW, Pattern.compile(
+                    "schedule (?:an|your|a) interview|invite you to (?:an )?interview"
+                            + "|would (?:like|love) to interview|interview with (?:our|the)"
+                            + "|move (?:you )?(?:forward )?to the (?:next|interview) (?:round|stage)", F)));
+
+    private record StatusSignal(ApplicationStatus status, Pattern pattern) {
+    }
+
+    // sender local-parts that are machines, never a human contact
+    private static final Pattern ROBOT_LOCAL_PART = Pattern.compile(
+            "^(?:no-?reply|do-?not-?reply|notifications?|mailer-daemon|auto(?:mated)?-?(?:mail|reply)?|bounce)", F);
+
+    // display names that are teams or systems, not a person
+    private static final Pattern NON_PERSON_NAME = Pattern.compile(
+            "recruiting|careers|talent|hiring|notifications?|team|jobs|hr\\b|system|support", F);
 
     // personal mail providers - their domain never names the company
     private static final Set<String> FREEMAIL_DOMAINS = Set.of(
@@ -103,7 +131,46 @@ public class HeuristicConfirmationEmailParser implements ConfirmationEmailParser
         if (company == null || company.isBlank()) {
             return Optional.empty();
         }
-        return Optional.of(new ParsedApplication(company, position));
+
+        ApplicationStatus status = detectStatus(text);
+        String[] contact = extractContact(body);
+
+        return Optional.of(new ParsedApplication(company, position, status, contact[0], contact[1]));
+    }
+
+    private ApplicationStatus detectStatus(String text) {
+        for (StatusSignal signal : STATUS_SIGNALS) {
+            if (signal.pattern().matcher(text).find()) {
+                return signal.status();
+            }
+        }
+        return ApplicationStatus.APPLIED;
+    }
+
+    /**
+     * When the forwarded message was sent by a human (a recruiter reaching
+     * out about an interview or decision, rather than an ATS robot), their
+     * name and address make a Contact. Returns {name, email}, both null
+     * when the sender is a machine.
+     */
+    private String[] extractContact(String body) {
+        Matcher m = FORWARDED_FROM.matcher(body);
+        if (!m.find()) {
+            return new String[]{null, null};
+        }
+
+        String address = m.group("address").toLowerCase(Locale.ROOT);
+        String localPart = address.substring(0, address.indexOf('@'));
+        String name = clean(m.group("name"));
+
+        if (ROBOT_LOCAL_PART.matcher(localPart).find()) {
+            return new String[]{null, null};
+        }
+        if (name == null || name.contains("@") || NON_PERSON_NAME.matcher(name).find()) {
+            return new String[]{null, null};
+        }
+
+        return new String[]{name, address};
     }
 
     private String companyFromForwardedSender(String body) {
