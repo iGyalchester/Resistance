@@ -8,6 +8,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import com.resistance.shared.models.entity.ApplicationStatus;
 import com.resistance.shared.models.entity.JobApplication;
 
 @Controller
@@ -18,6 +19,12 @@ public class JobApplicationController {
 
 	public JobApplicationController(JobApplicationService theJobApplicationService) {
 		applicationService = theJobApplicationService;
+	}
+
+	// expose the status choices to the form's dropdown
+	@ModelAttribute("statuses")
+	public ApplicationStatus[] statuses() {
+		return ApplicationStatus.values();
 	}
 
 	// add mapping for "/list"

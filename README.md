@@ -9,8 +9,10 @@ infrastructure.
 
 ## Domain model
 
-- **JobApplication** - the central tracked record: company, position, status
-  (`applied`, `screening`, `interview`, `offer`, `rejected`, `accepted`, `withdrawn`)
+- **JobApplication** - the central tracked record: company, position, and an
+  `ApplicationStatus` enum (`APPLIED`, `SCREENING`, `INTERVIEW`, `OFFER`,
+  `REJECTED`, `ACCEPTED`, `WITHDRAWN`), optionally linked to the Contact it
+  came through (`@ManyToOne`, `contact_id`)
 - **Contact** - recruiters, referrals and hiring managers you talk to
 - **Recruiter / RecruiterDetail / JobPosting / Note / Candidate** - the advanced
   JPA mapping demos (1-1, 1-N, N-N) expressed in tracker terms

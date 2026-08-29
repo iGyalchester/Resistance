@@ -33,8 +33,11 @@
             <input type="text" th:field="*{positionTitle}"
                    class="form-control mb-4 w-25" placeholder="Position title">
 
-            <input type="text" th:field="*{status}"
-                   class="form-control mb-4 w-25" placeholder="Status (applied, screening, interview, offer, rejected)">
+            <select th:field="*{status}" class="form-select mb-4 w-25">
+                <option th:each="tempStatus : ${statuses}"
+                        th:value="${tempStatus}"
+                        th:text="${tempStatus}"></option>
+            </select>
 
             <button type="submit" class="btn btn-info col-2">Save</button>
 

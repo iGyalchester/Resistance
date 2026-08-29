@@ -3,16 +3,13 @@ package com.resistance.etl.validators;
 import com.resistance.etl.core.RecordValidator;
 import com.resistance.etl.core.ValidationResult;
 import com.resistance.shared.models.dto.JobApplicationDto;
+import com.resistance.shared.models.entity.ApplicationStatus;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 
 public class JobApplicationRecordValidator implements RecordValidator<JobApplicationDto> {
-
-    private static final Set<String> VALID_STATUSES =
-            Set.of("applied", "screening", "interview", "offer", "rejected", "accepted", "withdrawn");
 
     @Override
     public ValidationResult validate(JobApplicationDto record) {
@@ -26,8 +23,9 @@ public class JobApplicationRecordValidator implements RecordValidator<JobApplica
         }
         if (isBlank(record.getStatus())) {
             errors.add("status is required");
-        } else if (!VALID_STATUSES.contains(record.getStatus().trim().toLowerCase(Locale.ROOT))) {
-            errors.add("status must be one of " + VALID_STATUSES + ": " + record.getStatus());
+        } else if (ApplicationStatus.fromString(record.getStatus()).isEmpty()) {
+            errors.add("status must be one of "
+                    + Arrays.toString(ApplicationStatus.values()) + ": " + record.getStatus());
         }
 
         return errors.isEmpty() ? ValidationResult.ok() : ValidationResult.invalid(errors);

@@ -18,8 +18,15 @@ public class JobApplication {
     @Column(name="position_title")
     private String positionTitle;
 
+    @Enumerated(EnumType.STRING)
     @Column(name="status")
-    private String status;
+    private ApplicationStatus status;
+
+    // the contact (recruiter/referral) this application came through, if any.
+    // No cascade: Contact rows have their own lifecycle, this only sets the FK.
+    @ManyToOne
+    @JoinColumn(name="contact_id")
+    private Contact contact;
 
 
     // define constructors
@@ -27,7 +34,7 @@ public class JobApplication {
 
     }
 
-    public JobApplication(String companyName, String positionTitle, String status) {
+    public JobApplication(String companyName, String positionTitle, ApplicationStatus status) {
         this.companyName = companyName;
         this.positionTitle = positionTitle;
         this.status = status;
@@ -59,12 +66,20 @@ public class JobApplication {
         this.positionTitle = positionTitle;
     }
 
-    public String getStatus() {
+    public ApplicationStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(ApplicationStatus status) {
         this.status = status;
+    }
+
+    public Contact getContact() {
+        return contact;
+    }
+
+    public void setContact(Contact contact) {
+        this.contact = contact;
     }
 
     // define toString
@@ -74,7 +89,7 @@ public class JobApplication {
                 "id=" + id +
                 ", companyName='" + companyName + '\'' +
                 ", positionTitle='" + positionTitle + '\'' +
-                ", status='" + status + '\'' +
+                ", status=" + status +
                 '}';
     }
 }

@@ -31,6 +31,7 @@
 				<th>Company</th>
 				<th>Position</th>
 				<th>Status</th>
+				<th>Contact</th>
 				<th>Action</th>
 			</tr>
 		</thead>
@@ -41,6 +42,7 @@
 				<td th:text="${tempApplication.companyName}" />
 				<td th:text="${tempApplication.positionTitle}" />
 				<td th:text="${tempApplication.status}" />
+				<td th:text="${tempApplication.contact != null ? tempApplication.contact.firstName + ' ' + tempApplication.contact.lastName : '-'}" />
 
 				<!-- Add update button/link -->
 				<td>
