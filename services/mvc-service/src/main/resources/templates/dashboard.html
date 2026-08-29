@@ -1,0 +1,58 @@
+<!DOCTYPE HTML>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-Zenh87qX5JnK2Jl0vWa8Ck2rdkQ2Bzep5IDxbcnCeuOxjzrPF/et3URy9Bv1WTRi" crossorigin="anonymous">
+
+    <title>My Dashboard</title>
+</head>
+
+<body>
+
+<div class="container">
+
+    <nav class="my-3 d-flex justify-content-between">
+        <span>
+            <a th:href="@{/applications/list}">Applications</a> |
+            <a th:href="@{/contacts/list}">Contacts</a> |
+            <strong>My Dashboard</strong>
+        </span>
+        <a th:href="@{/logout}">Log out</a>
+    </nav>
+
+    <h3 th:text="'Applications for ' + ${account.fullName}">Your applications</h3>
+    <p class="text-muted" th:text="${account.email}">you@example.com</p>
+    <hr>
+
+    <p th:if="${applications.isEmpty()}">
+        Nothing tracked yet. Forward an application-confirmation email to your
+        intake address and it will show up here.
+    </p>
+
+    <table class="table table-bordered table-striped" th:unless="${applications.isEmpty()}">
+        <thead class="table-dark">
+            <tr>
+                <th>Company</th>
+                <th>Position</th>
+                <th>Status</th>
+                <th>Contact</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            <tr th:each="tempApplication : ${applications}">
+                <td th:text="${tempApplication.companyName}" />
+                <td th:text="${tempApplication.positionTitle != null ? tempApplication.positionTitle : '-'}" />
+                <td th:text="${tempApplication.status}" />
+                <td th:text="${tempApplication.contact != null ? tempApplication.contact.firstName + ' ' + tempApplication.contact.lastName : '-'}" />
+            </tr>
+        </tbody>
+    </table>
+
+</div>
+
+</body>
+</html>

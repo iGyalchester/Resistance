@@ -34,6 +34,7 @@
 		<module>services/mvc-service</module>
 		<module>services/mvc-security-service</module>
 		<module>services/advanced-data-service</module>
+		<module>services/intake-service</module>
 
 		<!-- ETL -->
 		<module>etl/etl-core</module>

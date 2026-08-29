@@ -28,6 +28,12 @@ public class JobApplication {
     @JoinColumn(name="contact_id")
     private Contact contact;
 
+    // the tracker user this application belongs to; set by email intake,
+    // nullable so manually entered rows keep working
+    @ManyToOne
+    @JoinColumn(name="owner_account_id")
+    private UserAccount owner;
+
 
     // define constructors
     public JobApplication() {
@@ -80,6 +86,14 @@ public class JobApplication {
 
     public void setContact(Contact contact) {
         this.contact = contact;
+    }
+
+    public UserAccount getOwner() {
+        return owner;
+    }
+
+    public void setOwner(UserAccount owner) {
+        this.owner = owner;
     }
 
     // define toString

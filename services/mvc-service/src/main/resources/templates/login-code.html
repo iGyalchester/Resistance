@@ -1,0 +1,43 @@
+<!DOCTYPE HTML>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-Zenh87qX5JnK2Jl0vWa8Ck2rdkQ2Bzep5IDxbcnCeuOxjzrPF/et3URy9Bv1WTRi" crossorigin="anonymous">
+
+    <title>Enter your code</title>
+</head>
+
+<body>
+
+    <div class="container" style="max-width: 480px;">
+
+        <h3 class="mt-5">Check your inbox</h3>
+        <p class="text-muted">
+            If <span th:text="${email}">you@example.com</span> is registered,
+            a 6-digit code is on its way. It expires in 10 minutes.
+        </p>
+        <hr>
+
+        <div th:if="${loginError}" class="alert alert-danger" th:text="${loginError}"></div>
+
+        <form action="#" th:action="@{/login/code}" method="POST">
+
+            <input type="text" name="code" required inputmode="numeric" pattern="[0-9]{6}"
+                   maxlength="6" autocomplete="one-time-code"
+                   class="form-control mb-4" placeholder="123456">
+
+            <button type="submit" class="btn btn-primary">Log in</button>
+
+        </form>
+
+        <hr>
+        <a th:href="@{/login}">Use a different email</a>
+
+    </div>
+
+</body>
+
+</html>

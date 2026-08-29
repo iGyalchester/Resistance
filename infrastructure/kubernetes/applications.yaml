@@ -187,3 +187,38 @@ spec:
     app: api-gateway
   ports:
     - port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intake-service
+  namespace: resistance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: intake-service
+  template:
+    metadata:
+      labels:
+        app: intake-service
+    spec:
+      containers:
+        - name: intake-service
+          image: resistance/intake-service:latest
+          ports:
+            - containerPort: 8087
+          env:
+            - name: DB_HOST
+              value: mysql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: intake-service
+  namespace: resistance
+spec:
+  selector:
+    app: intake-service
+  ports:
+    - port: 8087

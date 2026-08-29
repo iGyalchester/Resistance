@@ -12,8 +12,11 @@ infrastructure.
 - **JobApplication** - the central tracked record: company, position, and an
   `ApplicationStatus` enum (`APPLIED`, `SCREENING`, `INTERVIEW`, `OFFER`,
   `REJECTED`, `ACCEPTED`, `WITHDRAWN`), optionally linked to the Contact it
-  came through (`@ManyToOne`, `contact_id`)
+  came through (`contact_id`) and owned by the UserAccount that forwarded it
+  (`owner_account_id`)
 - **Contact** - recruiters, referrals and hiring managers you talk to
+- **UserAccount / LoginCode** - tracker users, auto-provisioned by email
+  intake; passwordless login via hashed one-time codes
 - **Recruiter / RecruiterDetail / JobPosting / Note / Candidate** - the advanced
   JPA mapping demos (1-1, 1-N, N-N) expressed in tracker terms
 
@@ -28,7 +31,8 @@ Resistance/
 │   ├── security-service/          REST API + JDBC users/roles/bcrypt security (port 8084)
 │   ├── mvc-service/               Spring MVC + Thymeleaf application CRUD & forms (port 8085)
 │   ├── mvc-security-service/      MVC form login, roles, custom tables (port 8086)
-│   └── advanced-data-service/     JPA advanced mappings CLI demo (1-1, 1-N, N-N)
+│   ├── advanced-data-service/     JPA advanced mappings CLI demo (1-1, 1-N, N-N)
+│   └── intake-service/            Email intake: webhook / AWS SES+SNS / IMAP (port 8087)
 │
 ├── shared/
 │   ├── shared-models/             JPA entities and DTOs
@@ -46,6 +50,7 @@ Resistance/
 │   ├── docker-compose.yml         MySQL + services + gateway
 │   ├── docker/Dockerfile          Generic multi-stage image for any module
 │   ├── kubernetes/                Namespace, MySQL, and application manifests
+│   ├── aws/                       SES inbound -> SNS CloudFormation stack + guide
 │   └── config/db-init/            Database schemas and seed data
 │
 └── api-gateway/                   Routes /{service}/** to the matching service (port 8080)
@@ -86,6 +91,46 @@ docker compose -f infrastructure/docker-compose.yml up --build
 ```
 
 The gateway then serves e.g. `http://localhost:8080/rest-api/api/applications`.
+
+## Email intake & passwordless login
+
+The zero-form workflow: when a company sends "we received your application",
+forward that email to your tracker's intake address. `intake-service` then
+
+1. resolves (or auto-creates) your **UserAccount** from the forwarding sender,
+2. parses the company and position out of the confirmation
+   (`HeuristicConfirmationEmailParser` - an interface, so an LLM-backed parser
+   can slot in later), and
+3. creates the **JobApplication** with status `APPLIED`, owned by you.
+   Forwarding the same confirmation twice is a no-op.
+
+Three inbound paths feed the same flow - pick whichever fits:
+
+| Path | Use when | Setup |
+|---|---|---|
+| `POST /intake/email` JSON webhook | You use Mailgun/SendGrid/Postmark inbound parse, or want a curl smoke test | Set `intake.webhook-token`, point the provider at the endpoint |
+| `POST /intake/aws-sns` | You run on AWS | Deploy `infrastructure/aws/ses-intake.yaml` (see `infrastructure/aws/README.md`), set `intake.aws.topic-arn` |
+| IMAP polling | Any ordinary mailbox, e.g. Gmail + app password | `intake.imap.enabled=true` + host/username/password |
+
+Smoke test with curl:
+
+```bash
+curl -s -X POST localhost:8087/intake/email \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "fromAddress": "you@gmail.com",
+    "fromName": "Your Name",
+    "subject": "Fwd: Thank you for applying to Acme Corp",
+    "body": "We received your application for the Backend Engineer position at Acme Corp."
+  }'
+```
+
+**Logging in** (mvc-service, port 8085): go to `/login`, enter your email, and
+submit the 6-digit one-time code you receive - no password exists anywhere.
+Codes are stored hashed, expire after 10 minutes, and allow 5 attempts. With no
+SMTP configured the code is printed in the mvc-service log (dev mode); set
+`spring.mail.*` (any SMTP server, including AWS SES's) for real delivery. After
+login, `/dashboard` shows only your applications.
 
 ## ETL
 

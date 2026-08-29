@@ -21,7 +21,7 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 	
 	@Override
 	public List<JobApplication> findAll() {
-		return applicationRepository.findAllByOrderByLastNameAsc();
+		return applicationRepository.findAllByOrderByCompanyNameAsc();
 	}
 
 	@Override

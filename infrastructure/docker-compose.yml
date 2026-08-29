@@ -74,6 +74,20 @@ services:
       mysql:
         condition: service_healthy
 
+  intake-service:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile
+      args:
+        MODULE: services/intake-service
+    environment:
+      DB_HOST: mysql
+    ports:
+      - "8087:8087"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   api-gateway:
     build:
       context: ..
@@ -82,6 +96,7 @@ services:
         MODULE: api-gateway
     environment:
       REST_API_SERVICE_HOST: rest-api-service
+      INTAKE_SERVICE_HOST: intake-service
       SECURITY_SERVICE_HOST: security-service
       MVC_SERVICE_HOST: mvc-service
       MVC_SECURITY_SERVICE_HOST: mvc-security-service
@@ -89,6 +104,7 @@ services:
       - "8080:8080"
     depends_on:
       - rest-api-service
+      - intake-service
       - security-service
       - mvc-service
       - mvc-security-service
