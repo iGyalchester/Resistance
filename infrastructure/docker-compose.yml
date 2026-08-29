@@ -1,0 +1,97 @@
+name: resistance
+
+# Run from the repository root:
+#   docker compose -f infrastructure/docker-compose.yml up --build
+services:
+  mysql:
+    image: mysql:9
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./config/db-init:/docker-entrypoint-initdb.d:ro
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  rest-api-service:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile
+      args:
+        MODULE: services/rest-api-service
+    environment:
+      DB_HOST: mysql
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  security-service:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile
+      args:
+        MODULE: services/security-service
+    environment:
+      DB_HOST: mysql
+    ports:
+      - "8084:8084"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mvc-service:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile
+      args:
+        MODULE: services/mvc-service
+    environment:
+      DB_HOST: mysql
+    ports:
+      - "8085:8085"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mvc-security-service:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile
+      args:
+        MODULE: services/mvc-security-service
+    environment:
+      DB_HOST: mysql
+    ports:
+      - "8086:8086"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile
+      args:
+        MODULE: api-gateway
+    environment:
+      REST_API_SERVICE_HOST: rest-api-service
+      SECURITY_SERVICE_HOST: security-service
+      MVC_SERVICE_HOST: mvc-service
+      MVC_SECURITY_SERVICE_HOST: mvc-security-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      - rest-api-service
+      - security-service
+      - mvc-service
+      - mvc-security-service
+
+volumes:
+  mysql-data:

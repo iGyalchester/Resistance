@@ -1,0 +1,26 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build:
+    name: "Build all modules"
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6.0.2
+
+    - name: Set up JDK 26
+      uses: actions/setup-java@v5.2.0
+      with:
+        java-version: '26'
+        distribution: 'temurin'
+        cache: 'maven'
+
+    # Tests are skipped in CI because the service integration tests
+    # expect a local MySQL instance (see infrastructure/docker-compose.yml).
+    - name: Compile all modules
+      run: mvn -B clean compile

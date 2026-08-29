@@ -1,0 +1,189 @@
+# Application deployments. Build images with infrastructure/docker/Dockerfile
+# and tag them resistance/<service>:latest (or point at your registry).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rest-api-service
+  namespace: resistance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rest-api-service
+  template:
+    metadata:
+      labels:
+        app: rest-api-service
+    spec:
+      containers:
+        - name: rest-api-service
+          image: resistance/rest-api-service:latest
+          ports:
+            - containerPort: 8083
+          env:
+            - name: DB_HOST
+              value: mysql
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rest-api-service
+  namespace: resistance
+spec:
+  selector:
+    app: rest-api-service
+  ports:
+    - port: 8083
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-service
+  namespace: resistance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: security-service
+  template:
+    metadata:
+      labels:
+        app: security-service
+    spec:
+      containers:
+        - name: security-service
+          image: resistance/security-service:latest
+          ports:
+            - containerPort: 8084
+          env:
+            - name: DB_HOST
+              value: mysql
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: security-service
+  namespace: resistance
+spec:
+  selector:
+    app: security-service
+  ports:
+    - port: 8084
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mvc-service
+  namespace: resistance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mvc-service
+  template:
+    metadata:
+      labels:
+        app: mvc-service
+    spec:
+      containers:
+        - name: mvc-service
+          image: resistance/mvc-service:latest
+          ports:
+            - containerPort: 8085
+          env:
+            - name: DB_HOST
+              value: mysql
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mvc-service
+  namespace: resistance
+spec:
+  selector:
+    app: mvc-service
+  ports:
+    - port: 8085
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mvc-security-service
+  namespace: resistance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mvc-security-service
+  template:
+    metadata:
+      labels:
+        app: mvc-security-service
+    spec:
+      containers:
+        - name: mvc-security-service
+          image: resistance/mvc-security-service:latest
+          ports:
+            - containerPort: 8086
+          env:
+            - name: DB_HOST
+              value: mysql
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mvc-security-service
+  namespace: resistance
+spec:
+  selector:
+    app: mvc-security-service
+  ports:
+    - port: 8086
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: resistance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: resistance/api-gateway:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: mysql
+            - name: REST_API_SERVICE_HOST
+              value: rest-api-service
+            - name: SECURITY_SERVICE_HOST
+              value: security-service
+            - name: MVC_SERVICE_HOST
+              value: mvc-service
+            - name: MVC_SECURITY_SERVICE_HOST
+              value: mvc-security-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: resistance
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - port: 8080

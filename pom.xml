@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>4.1.0</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+	<groupId>com.resistance</groupId>
+	<artifactId>resistance-parent</artifactId>
+	<version>1.0.0-SNAPSHOT</version>
+	<packaging>pom</packaging>
+	<name>resistance-parent</name>
+	<description>Resistance - Spring Boot multi-module monorepo</description>
+
+	<properties>
+		<java.version>26</java.version>
+	</properties>
+
+	<modules>
+		<!-- Shared libraries -->
+		<module>shared/shared-models</module>
+		<module>shared/shared-validation</module>
+		<module>shared/shared-exceptions</module>
+		<module>shared/shared-utils</module>
+
+		<!-- Services -->
+		<module>services/core-service</module>
+		<module>services/data-service</module>
+		<module>services/rest-api-service</module>
+		<module>services/security-service</module>
+		<module>services/mvc-service</module>
+		<module>services/mvc-security-service</module>
+		<module>services/advanced-data-service</module>
+
+		<!-- ETL -->
+		<module>etl/etl-core</module>
+		<module>etl/etl-data-processors</module>
+		<module>etl/etl-validators</module>
+		<module>etl/etl-runner</module>
+
+		<!-- Edge -->
+		<module>api-gateway</module>
+	</modules>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>com.resistance</groupId>
+				<artifactId>shared-models</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.resistance</groupId>
+				<artifactId>shared-validation</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.resistance</groupId>
+				<artifactId>shared-exceptions</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.resistance</groupId>
+				<artifactId>shared-utils</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.resistance</groupId>
+				<artifactId>etl-core</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.resistance</groupId>
+				<artifactId>etl-data-processors</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.resistance</groupId>
+				<artifactId>etl-validators</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+</project>
