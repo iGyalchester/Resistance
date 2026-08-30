@@ -27,6 +27,12 @@ public class UserAccount {
     @Column(name="phone")
     private String phone;
 
+    // the secret tag in this user's personal intake address
+    // (track+<alias>@domain); knowing it is what authorizes filing email
+    // into this account, so it is random and unique
+    @Column(name="intake_alias", unique = true)
+    private String intakeAlias;
+
     public UserAccount() {
     }
 
@@ -65,6 +71,14 @@ public class UserAccount {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public String getIntakeAlias() {
+        return intakeAlias;
+    }
+
+    public void setIntakeAlias(String intakeAlias) {
+        this.intakeAlias = intakeAlias;
     }
 
     @Override

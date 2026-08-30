@@ -30,7 +30,8 @@ public class EmailIntakeController {
         this.webhookToken = webhookToken;
     }
 
-    public record EmailPayload(String fromAddress, String fromName, String subject, String body) {
+    public record EmailPayload(String fromAddress, String fromName, String toAddress,
+                               String subject, String body) {
     }
 
     @PostMapping("/email")
@@ -43,7 +44,8 @@ public class EmailIntakeController {
         }
 
         IntakeResult result = intakeService.process(new InboundEmail(
-                payload.fromAddress(), payload.fromName(), payload.subject(), payload.body()));
+                payload.fromAddress(), payload.fromName(), payload.toAddress(),
+                payload.subject(), payload.body()));
 
         return ResponseEntity.ok(result);
     }

@@ -5,6 +5,7 @@ import com.resistance.mvc.dao.JobApplicationRepository;
 import com.resistance.mvc.dao.UserAccountRepository;
 import com.resistance.shared.models.entity.UserAccount;
 import jakarta.servlet.http.HttpSession;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,11 +19,14 @@ public class DashboardController {
 
     private final UserAccountRepository accountRepository;
     private final JobApplicationRepository applicationRepository;
+    private final String intakeBaseAddress;
 
     public DashboardController(UserAccountRepository accountRepository,
-                               JobApplicationRepository applicationRepository) {
+                               JobApplicationRepository applicationRepository,
+                               @Value("${tracker.intake.address:track@resistance.example}") String intakeBaseAddress) {
         this.accountRepository = accountRepository;
         this.applicationRepository = applicationRepository;
+        this.intakeBaseAddress = intakeBaseAddress;
     }
 
     @GetMapping("/dashboard")
@@ -37,6 +41,16 @@ public class DashboardController {
 
         model.addAttribute("account", account);
         model.addAttribute("applications", applicationRepository.findByOwnerId(accountId));
+        model.addAttribute("intakeAddress", personalIntakeAddress(account.getIntakeAlias()));
         return "dashboard";
+    }
+
+    // "track@domain" + alias "a8f3k2xq99" -> "track+a8f3k2xq99@domain"
+    private String personalIntakeAddress(String alias) {
+        int at = intakeBaseAddress.indexOf('@');
+        if (alias == null || alias.isBlank() || at < 0) {
+            return null;
+        }
+        return intakeBaseAddress.substring(0, at) + "+" + alias + intakeBaseAddress.substring(at);
     }
 }

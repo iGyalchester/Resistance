@@ -97,12 +97,22 @@ The gateway then serves e.g. `http://localhost:8080/rest-api/api/applications`.
 The zero-form workflow: when a company sends "we received your application",
 forward that email to your tracker's intake address. `intake-service` then
 
-1. resolves (or auto-creates) your **UserAccount** from the forwarding sender,
-2. parses the company and position out of the confirmation
-   (`HeuristicConfirmationEmailParser` - an interface, so an LLM-backed parser
-   can slot in later), and
-3. creates the **JobApplication** with status `APPLIED`, owned by you.
-   Forwarding the same confirmation twice is a no-op.
+1. resolves your **UserAccount** - preferably from the **personal intake
+   alias** in the recipient address (`track+<alias>@domain`), which is the
+   trust anchor: knowing your alias is what authorizes filing into your
+   account, so a spoofed From header buys an attacker nothing. Your first
+   forward to the bare address provisions the account and hands out the
+   alias (shown on the dashboard and echoed by the webhook); with
+   `intake.require-alias=true` (qa) the bare address accepts nothing.
+2. parses the email: regex heuristics first (free, offline), and - when an
+   `ANTHROPIC_API_KEY` is configured - **Claude** (`claude-opus-5` via the
+   official Anthropic Java SDK, schema-validated structured output, model
+   output sanitized before use) for the emails the heuristics can't read.
+   Rejections flip the application to `REJECTED`, interview invites to
+   `INTERVIEW`, offers to `OFFER`; a human recruiter's reply is captured
+   as a linked Contact.
+3. creates or updates the **JobApplication** accordingly. Forwarding the
+   same confirmation twice is a no-op.
 
 Three inbound paths feed the same flow - pick whichever fits:
 
@@ -154,8 +164,15 @@ What is actually in place today:
   constant-time comparison, no account enumeration; `/dashboard` is
   session-gated.
 - **Intake hardening**: the webhook requires an `X-Intake-Token` shared
-  secret and the SNS endpoint pins the topic ARN - both optional in dev,
-  mandatory in qa.
+  secret; the SNS endpoint **verifies the SNS message signature** (RSA
+  against the AWS signing certificate, cert-URL host pinned to
+  `sns.*.amazonaws.com`) and pins the topic ARN; account routing trusts
+  the personal intake alias, not the spoofable From header. All hard
+  requirements in qa; dev relaxes the signature check for curl testing.
+- **LLM output treated as untrusted**: the Claude parser pins the prompt to
+  extraction-only over delimited email content, and sanitizes the structured
+  response (length caps, enum parse, email validation) before persistence;
+  any API error or refusal degrades to "not parsed".
 - **PII encryption at rest**: AES-256-GCM via a JPA converter, keyed by an
   AWS KMS-generated data key (`TRACKER_ENC_KEY`). Currently applied to
   `user_account.phone`; extend by annotating fields with

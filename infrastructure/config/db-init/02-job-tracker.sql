@@ -16,8 +16,10 @@ CREATE TABLE `user_account` (
   `full_name` varchar(90) DEFAULT NULL,
   `email` varchar(120) NOT NULL,
   `phone` varchar(255) DEFAULT NULL,
+  `intake_alias` varchar(32) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `EMAIL_UNIQUE` (`email`)
+  UNIQUE KEY `EMAIL_UNIQUE` (`email`),
+  UNIQUE KEY `INTAKE_ALIAS_UNIQUE` (`intake_alias`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
 --
@@ -25,7 +27,7 @@ CREATE TABLE `user_account` (
 --
 
 INSERT INTO `user_account` VALUES
-	(1,'Demo User','demo@resistance.com',NULL);
+	(1,'Demo User','demo@resistance.com',NULL,'demo2f7kq3');
 
 --
 -- Table structure for table `login_code` (one-time login codes; only the

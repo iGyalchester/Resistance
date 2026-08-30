@@ -11,9 +11,11 @@ import com.resistance.shared.models.entity.JobApplication;
 import com.resistance.shared.models.entity.UserAccount;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -29,38 +31,72 @@ public class IntakeService {
 
     private static final Logger log = LoggerFactory.getLogger(IntakeService.class);
 
+    // unambiguous lowercase alphabet for intake aliases
+    private static final char[] ALIAS_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789".toCharArray();
+    private static final int ALIAS_LENGTH = 10;
+
     private final UserAccountRepository accountRepository;
     private final JobApplicationRepository applicationRepository;
     private final ContactRepository contactRepository;
     private final ConfirmationEmailParser parser;
+    private final boolean requireAlias;
+    private final SecureRandom random = new SecureRandom();
 
     public IntakeService(UserAccountRepository accountRepository,
                          JobApplicationRepository applicationRepository,
                          ContactRepository contactRepository,
-                         ConfirmationEmailParser parser) {
+                         ConfirmationEmailParser parser,
+                         @Value("${intake.require-alias:false}") boolean requireAlias) {
         this.accountRepository = accountRepository;
         this.applicationRepository = applicationRepository;
         this.contactRepository = contactRepository;
         this.parser = parser;
+        this.requireAlias = requireAlias;
     }
 
     @Transactional
     public IntakeResult process(InboundEmail email) {
         String senderAddress = normalizeAddress(email.fromAddress());
 
+        // The +alias tag in the recipient address is the trust anchor: only
+        // someone who knows the account's personal intake address can file
+        // into it, so a spoofed From header buys an attacker nothing.
+        Optional<String> alias = extractAlias(email.toAddress());
+
         boolean[] created = {false};
-        UserAccount account = accountRepository.findByEmailIgnoreCase(senderAddress)
-                .orElseGet(() -> {
-                    created[0] = true;
-                    UserAccount newAccount = new UserAccount(displayName(email), senderAddress);
-                    log.info("Provisioning account for {}", senderAddress);
-                    return accountRepository.save(newAccount);
-                });
+        UserAccount account;
+
+        if (alias.isPresent()) {
+            Optional<UserAccount> byAlias = accountRepository.findByIntakeAlias(alias.get());
+            if (byAlias.isEmpty()) {
+                log.warn("Ignoring email to unknown intake alias '{}'", alias.get());
+                return IntakeResult.ignored("IGNORED_UNKNOWN_ALIAS");
+            }
+            account = byAlias.get();
+        } else if (requireAlias) {
+            // strict mode (qa/prod): the bare intake address provisions nothing
+            log.warn("Ignoring email without an intake alias from {}", senderAddress);
+            return IntakeResult.ignored("IGNORED_NO_ALIAS");
+        } else {
+            // bootstrap path: mail to the bare intake address resolves (or
+            // provisions) the account by sender and hands out an alias
+            account = accountRepository.findByEmailIgnoreCase(senderAddress)
+                    .orElseGet(() -> {
+                        created[0] = true;
+                        UserAccount newAccount = new UserAccount(displayName(email), senderAddress);
+                        log.info("Provisioning account for {}", senderAddress);
+                        return newAccount;
+                    });
+            if (account.getIntakeAlias() == null) {
+                account.setIntakeAlias(generateAlias());
+                account = accountRepository.save(account);
+            }
+        }
 
         Optional<ParsedApplication> parsedResult = parser.parse(email);
         if (parsedResult.isEmpty()) {
             log.warn("Could not parse a company out of email '{}' from {}", email.subject(), senderAddress);
-            return IntakeResult.notParsed(account.getEmail(), created[0]);
+            return IntakeResult.notParsed(account.getEmail(), created[0], account.getIntakeAlias());
         }
         ParsedApplication parsed = parsedResult.get();
 
@@ -107,7 +143,33 @@ public class IntakeService {
 
         return new IntakeResult(outcome, application.getId(), application.getCompanyName(),
                 application.getPositionTitle(), application.getStatus(),
-                account.getEmail(), created[0]);
+                account.getEmail(), created[0], account.getIntakeAlias());
+    }
+
+    /**
+     * "track+a8f3k2xq@domain" -> "a8f3k2xq"; empty when the recipient is
+     * unknown or has no plus tag.
+     */
+    static Optional<String> extractAlias(String toAddress) {
+        if (toAddress == null) {
+            return Optional.empty();
+        }
+        String address = toAddress.trim().toLowerCase();
+        int at = address.indexOf('@');
+        int plus = address.indexOf('+');
+        if (at < 0 || plus < 0 || plus > at) {
+            return Optional.empty();
+        }
+        String alias = address.substring(plus + 1, at);
+        return alias.isBlank() ? Optional.empty() : Optional.of(alias);
+    }
+
+    private String generateAlias() {
+        StringBuilder alias = new StringBuilder(ALIAS_LENGTH);
+        for (int i = 0; i < ALIAS_LENGTH; i++) {
+            alias.append(ALIAS_ALPHABET[random.nextInt(ALIAS_ALPHABET.length)]);
+        }
+        return alias.toString();
     }
 
     /**

@@ -40,7 +40,10 @@ SNS topic ──HTTPS subscription──> POST https://<your-host>/intake/aws-sn
    aws ses set-active-receipt-rule-set --rule-set-name resistance-intake
    ```
 
-4. Configure intake-service with the stack's `TopicArn` output:
+4. Configure intake-service with the stack's `TopicArn` output (the service
+   also verifies every SNS message's signature against the AWS signing
+   certificate by default - `intake.aws.verify-signature=true` - so forged
+   posts to the endpoint are rejected even if the URL leaks):
 
    ```properties
    intake.aws.topic-arn=arn:aws:sns:...:resistance-intake
@@ -49,6 +52,16 @@ SNS topic ──HTTPS subscription──> POST https://<your-host>/intake/aws-sn
    SNS delivers the subscription-confirmation to the running service, which
    confirms it automatically — check the intake-service logs for
    "Confirmed SNS subscription".
+
+## Personal intake aliases
+
+Account routing is based on the recipient address, not the sender: each
+account gets a random alias and its personal address `track+<alias>@domain`.
+SES receipt rules match the bare recipient (`track@domain`) and deliver
+plus-tagged variants to the same rule, so no extra AWS setup is needed.
+In qa set `intake.require-alias=true` (mail to the bare address then
+provisions nothing) and inject `INTAKE_ADDRESS=track@yourdomain.com` into
+mvc-service so dashboards render each user's personal address.
 
 ## OTP email through SES
 
@@ -103,6 +116,8 @@ as environment variables:
 | `INTAKE_AWS_TOPIC_ARN` | `ses-intake.yaml` stack output | intake |
 | `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `OTP_FROM_ADDRESS` | SES SMTP credentials + verified sender | mvc |
 | `TRACKER_ENC_KEY` | KMS data key (above) | intake, mvc |
+| `INTAKE_ADDRESS` | the bare intake address (SES-verified recipient) | mvc |
+| `ANTHROPIC_API_KEY` *(optional)* | Anthropic API key for Claude-backed parsing | intake |
 
 Dev needs none of this: no profile flag (dev is the default), local MySQL
 from docker-compose, logged OTP codes, open webhook, plaintext PII.

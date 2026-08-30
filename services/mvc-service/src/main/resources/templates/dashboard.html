@@ -25,6 +25,11 @@
 
     <h3 th:text="'Applications for ' + ${account.fullName}">Your applications</h3>
     <p class="text-muted" th:text="${account.email}">you@example.com</p>
+    <p th:if="${intakeAddress}" class="text-muted">
+        Your personal intake address:
+        <code th:text="${intakeAddress}">track+alias@example.com</code>
+        &mdash; forward application emails there and only there.
+    </p>
     <hr>
 
     <p th:if="${applications.isEmpty()}">

@@ -85,6 +85,15 @@ public class ImapPollingService {
             fromAddress = internetAddress.getAddress();
             fromName = internetAddress.getPersonal();
         }
-        return new InboundEmail(fromAddress, fromName, message.getSubject(), MimeText.extract(message));
+
+        String toAddress = null;
+        var recipients = message.getRecipients(Message.RecipientType.TO);
+        if (recipients != null && recipients.length > 0
+                && recipients[0] instanceof InternetAddress recipient) {
+            toAddress = recipient.getAddress();
+        }
+
+        return new InboundEmail(fromAddress, fromName, toAddress,
+                message.getSubject(), MimeText.extract(message));
     }
 }

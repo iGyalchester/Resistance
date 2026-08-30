@@ -15,7 +15,7 @@ class HeuristicConfirmationEmailParserTests {
     private final HeuristicConfirmationEmailParser parser = new HeuristicConfirmationEmailParser();
 
     private InboundEmail email(String subject, String body) {
-        return new InboundEmail("boris@gmail.com", "Boris Gerard", subject, body);
+        return new InboundEmail("boris@gmail.com", "Boris Gerard", null, subject, body);
     }
 
     @Test

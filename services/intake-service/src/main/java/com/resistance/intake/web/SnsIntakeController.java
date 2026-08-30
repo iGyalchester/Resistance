@@ -1,5 +1,6 @@
 package com.resistance.intake.web;
 
+import com.resistance.intake.aws.SnsSignatureVerifier;
 import com.resistance.intake.mail.MimeText;
 import com.resistance.intake.service.InboundEmail;
 import com.resistance.intake.service.IntakeResult;
@@ -39,16 +40,22 @@ public class SnsIntakeController {
     private final IntakeService intakeService;
     private final JsonMapper jsonMapper;
     private final RestClient restClient;
+    private final SnsSignatureVerifier signatureVerifier;
     private final String expectedTopicArn;
+    private final boolean verifySignature;
 
     public SnsIntakeController(IntakeService intakeService,
                                JsonMapper jsonMapper,
                                RestClient.Builder restClientBuilder,
-                               @Value("${intake.aws.topic-arn:}") String expectedTopicArn) {
+                               SnsSignatureVerifier signatureVerifier,
+                               @Value("${intake.aws.topic-arn:}") String expectedTopicArn,
+                               @Value("${intake.aws.verify-signature:true}") boolean verifySignature) {
         this.intakeService = intakeService;
         this.jsonMapper = jsonMapper;
         this.restClient = restClientBuilder.build();
+        this.signatureVerifier = signatureVerifier;
         this.expectedTopicArn = expectedTopicArn;
+        this.verifySignature = verifySignature;
     }
 
     @PostMapping("/aws-sns")
@@ -56,6 +63,13 @@ public class SnsIntakeController {
         JsonNode message = jsonMapper.readTree(rawBody);
         String type = text(message, "Type");
         String topicArn = text(message, "TopicArn");
+
+        // the signature is the only field an attacker can't forge; the
+        // TopicArn check below is defense-in-depth on top of it
+        if (verifySignature && !signatureVerifier.isValid(message)) {
+            log.warn("Rejecting SNS message with missing/invalid signature");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
 
         if (!expectedTopicArn.isBlank() && !expectedTopicArn.equals(topicArn)) {
             log.warn("Rejecting SNS message from unexpected topic {}", topicArn);
@@ -94,6 +108,7 @@ public class SnsIntakeController {
 
         String fromAddress = mail.path("source").asString(null);
         String fromName = null;
+        String toAddress = mail.path("destination").path(0).asString(null);
         String subject = mail.path("commonHeaders").path("subject").asString(null);
         String body = "";
 
@@ -118,7 +133,7 @@ public class SnsIntakeController {
             }
         }
 
-        return new InboundEmail(fromAddress, fromName, subject, body);
+        return new InboundEmail(fromAddress, fromName, toAddress, subject, body);
     }
 
     private String text(JsonNode node, String field) {

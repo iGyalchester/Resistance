@@ -32,7 +32,7 @@ class IntakeServiceTests {
     private UserAccount account;
 
     private static final InboundEmail EMAIL =
-            new InboundEmail("boris@gmail.com", "Boris Gerard", "Fwd: anything", "body");
+            new InboundEmail("boris@gmail.com", "Boris Gerard", "track@resistance.example", "Fwd: anything", "body");
 
     @BeforeEach
     void setUp() {
@@ -40,11 +40,13 @@ class IntakeServiceTests {
         applications = mock(JobApplicationRepository.class);
         contacts = mock(ContactRepository.class);
         parser = mock(ConfirmationEmailParser.class);
-        intakeService = new IntakeService(accounts, applications, contacts, parser);
+        intakeService = new IntakeService(accounts, applications, contacts, parser, false);
 
         account = new UserAccount("Boris Gerard", "boris@gmail.com");
         account.setId(7);
+        account.setIntakeAlias("boris2k4mp9");
         when(accounts.findByEmailIgnoreCase("boris@gmail.com")).thenReturn(Optional.of(account));
+        when(accounts.save(any(UserAccount.class))).thenAnswer(inv -> inv.getArgument(0));
         when(applications.save(any(JobApplication.class))).thenAnswer(inv -> inv.getArgument(0));
         when(contacts.save(any(Contact.class))).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -111,6 +113,58 @@ class IntakeServiceTests {
 
         assertEquals("ALREADY_TRACKED", result.outcome());
         assertSame(original, existing.getContact());
+    }
+
+    @Test
+    void aliasRoutesToItsAccountRegardlessOfSender() {
+        UserAccount aliasOwner = new UserAccount("Alias Owner", "owner@example.com");
+        aliasOwner.setId(9);
+        aliasOwner.setIntakeAlias("a8f3k2xq99");
+        when(accounts.findByIntakeAlias("a8f3k2xq99")).thenReturn(Optional.of(aliasOwner));
+        when(applications.findByOwnerIdAndCompanyNameIgnoreCase(9, "Acme Corp")).thenReturn(List.of());
+        when(parser.parse(any())).thenReturn(Optional.of(new ParsedApplication("Acme Corp", null)));
+
+        InboundEmail spoofed = new InboundEmail("attacker@evil.example", "Attacker",
+                "track+a8f3k2xq99@resistance.example", "Fwd: anything", "body");
+        IntakeResult result = intakeService.process(spoofed);
+
+        assertEquals("CREATED", result.outcome());
+        assertEquals("owner@example.com", result.accountEmail());
+        assertFalse(result.accountCreated());
+    }
+
+    @Test
+    void unknownAliasIsIgnoredWithoutProvisioning() {
+        when(accounts.findByIntakeAlias("nosuchalias")).thenReturn(Optional.empty());
+
+        InboundEmail email = new InboundEmail("attacker@evil.example", "Attacker",
+                "track+nosuchalias@resistance.example", "Fwd: anything", "body");
+        IntakeResult result = intakeService.process(email);
+
+        assertEquals("IGNORED_UNKNOWN_ALIAS", result.outcome());
+        assertNull(result.accountEmail());
+    }
+
+    @Test
+    void strictModeIgnoresBareAddressEmail() {
+        IntakeService strict = new IntakeService(accounts, applications, contacts, parser, true);
+
+        IntakeResult result = strict.process(EMAIL);
+
+        assertEquals("IGNORED_NO_ALIAS", result.outcome());
+    }
+
+    @Test
+    void bootstrapPathAssignsAliasToNewAccount() {
+        when(accounts.findByEmailIgnoreCase(anyString())).thenReturn(Optional.empty());
+        when(accounts.save(any(UserAccount.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(applications.findByOwnerIdAndCompanyNameIgnoreCase(anyInt(), anyString())).thenReturn(List.of());
+        when(parser.parse(any())).thenReturn(Optional.of(new ParsedApplication("Acme Corp", null)));
+
+        IntakeResult result = intakeService.process(EMAIL);
+
+        assertNotNull(result.intakeAlias());
+        assertEquals(10, result.intakeAlias().length());
     }
 
     @Test
