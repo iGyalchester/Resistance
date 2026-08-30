@@ -6,18 +6,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -36,16 +31,16 @@ public class LoginController {
     private static final Logger log = LoggerFactory.getLogger(LoginController.class);
 
     private final OtpService otpService;
-    private final SecurityContextRepository securityContextRepository;
+    private final SessionAuthenticator sessionAuthenticator;
     private final OtpRequestThrottle emailThrottle;
     private final OtpRequestThrottle ipThrottle;
 
     public LoginController(OtpService otpService,
-                           SecurityContextRepository securityContextRepository,
+                           SessionAuthenticator sessionAuthenticator,
                            OtpRequestThrottle emailOtpThrottle,
                            OtpRequestThrottle ipOtpThrottle) {
         this.otpService = otpService;
-        this.securityContextRepository = securityContextRepository;
+        this.sessionAuthenticator = sessionAuthenticator;
         this.emailThrottle = emailOtpThrottle;
         this.ipThrottle = ipOtpThrottle;
     }
@@ -100,16 +95,8 @@ public class LoginController {
             return "login-code";
         }
 
-        // session fixation protection: a fresh id for the authenticated session
-        request.changeSessionId();
         session.removeAttribute(SESSION_LOGIN_EMAIL);
-        session.setAttribute(SESSION_ACCOUNT_ID, account.get().getId());
-
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-                account.get().getEmail(), null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
-        SecurityContextHolder.setContext(context);
-        securityContextRepository.saveContext(context, request, response);
+        sessionAuthenticator.establish(account.get(), request, response);
 
         return "redirect:/dashboard";
     }

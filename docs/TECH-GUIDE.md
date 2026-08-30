@@ -134,7 +134,9 @@ writes `account.getPhone()` normally, while the *column* holds ciphertext.
 template engine — HTML files with `th:` attributes that get filled in
 server-side (`th:each` loops, `th:text` inserts, `th:field` binds a form
 input to a Java object's field).
-**Why:** simple server-rendered pages, no JavaScript framework needed.
+**Why:** simple server-rendered pages, no JavaScript framework needed. (The
+React app in `frontend/` is the client-rendered counterpart — see
+[the React section](#the-react-front-end-frontend) for the comparison.)
 **Where:** `mvc-service/.../controller/` + `src/main/resources/templates/`.
 `JobApplicationController` + `applications/list-applications.html` is the
 canonical pair.
@@ -187,6 +189,92 @@ worth noticing in `auth/OtpService`:
 **Where:** `mvc-service/.../auth/`. `OtpNotifier` is the delivery
 abstraction: a log-to-console implementation for dev, SMTP when
 `spring.mail.host` is configured.
+
+---
+
+## The React front end (frontend/)
+
+### React, components, JSX
+
+**What:** React is a JavaScript library for building UIs out of
+**components** — functions that take data and return what the screen should
+show. The markup-in-JavaScript syntax (`<StatusBadge status={app.status} />`)
+is called **JSX**. When data changes (you call a `useState` setter), React
+re-runs the affected components and updates only the changed parts of the
+page. That's the whole mental model: *UI = function(state)*.
+**Why:** this is the other way to build a web UI. Our Thymeleaf pages are
+**server-rendered**: every click loads a whole new HTML page built by the
+server. The React app is a **SPA** ("single-page application"): the browser
+loads it once, then it fetches raw JSON from the server and redraws itself —
+snappier interactions, and the skill most frontend job postings ask for.
+Both UIs run side by side against the same services, so you can compare
+them page for page.
+**Where:** `frontend/src/`. Start with `App.tsx` (the route table), then
+`pages/DashboardPage.tsx` — fetch data in `useEffect`, hold it in
+`useState`, render a table from it.
+
+### TypeScript
+
+**What:** JavaScript plus compile-time types — the same deal Java gives
+you. `interface ApplicationView` in `src/api/types.ts` mirrors the Java
+`ApplicationView` record field for field; misspell a property and
+`tsc` fails the build instead of the browser failing the user.
+**Why:** virtually every production React codebase uses it.
+
+### Vite and the dev proxy
+
+**What:** Vite is the build tool: `npm run dev` serves the app with instant
+hot reload at `localhost:5173`, `npm run build` type-checks and bundles it
+into static files in `dist/`. The `server.proxy` entry in `vite.config.ts`
+forwards `/api/**` to mvc-service on 8085, so the browser talks to *one*
+origin — no CORS configuration, and the session cookie flows naturally.
+**Where:** `frontend/vite.config.ts`, scripts in `frontend/package.json`.
+
+### The JSON API the SPA talks to
+
+**What:** `@RestController` classes in `mvc-service/.../api/` — same
+Spring MVC as the page controllers, but returning objects that Spring
+serializes to JSON instead of template names. They reuse the exact same
+`OtpService`, throttles, and owner-scoped `JobApplicationService` as the
+Thymeleaf pages; `SessionAuthenticator` is the shared piece that turns a
+verified code into an authenticated session for both. Entities never go on
+the wire — flat records (`ApplicationView`, `MeView`) do, so lazy-loading
+proxies and fields like the owner link can't leak by accident.
+**Why not rest-api-service?** that module (port 8083) is the unsecured
+course demo. The real API lives where the security machinery already is.
+**Where:** `api/AuthApiController.java`, `api/ApplicationApiController.java`,
+tests in `src/test/java/com/resistance/mvc/api/`.
+
+### Auth from a SPA: the session cookie and the CSRF dance
+
+**What:** the React app logs in with the same OTP flow and gets the same
+session cookie as the Thymeleaf pages — no tokens, no JWT. Two SPA-specific
+wrinkles:
+
+- **401 instead of redirect:** an anonymous *page* request should bounce to
+  `/login`; an anonymous *fetch* should not receive a 302 to an HTML page.
+  `SecurityConfig` gives `/api/**` its own entry point returning
+  `401 {"error":"unauthenticated"}`, which `src/api/client.ts` turns into a
+  client-side redirect to the login route.
+- **CSRF for JavaScript:** Thymeleaf gets its CSRF token injected into
+  forms server-side; JavaScript can't. So the token also lives in a
+  readable `XSRF-TOKEN` cookie, and the client echoes it back in an
+  `X-XSRF-TOKEN` header on every POST. `SpaCsrfTokenRequestHandler` is
+  Spring Security's documented recipe for accepting both styles at once.
+
+**Where:** `auth/SecurityConfig.java`, `auth/SpaCsrfTokenRequestHandler.java`,
+`frontend/src/api/client.ts`, `frontend/src/auth/AuthContext.tsx` (the
+route guard that asks `GET /api/auth/me` "who am I?" on page load).
+
+### Vitest + React Testing Library
+
+**What:** the frontend's JUnit. Vitest runs the tests; React Testing
+Library renders components into a simulated browser (jsdom) and interacts
+the way a user would — find the field labeled "Email address", type into
+it, click the button, assert what appears. `fetch` is stubbed per test, so
+the whole login → code → dashboard journey runs in milliseconds with no
+server.
+**Where:** `frontend/src/test/`. `LoginFlow.test.tsx` is the canonical one.
 
 ---
 
@@ -322,7 +410,7 @@ logged warning). The full ceremony is in
 | **Kubernetes manifests** | YAML describing how a cluster should run the same containers (replicas, ports, env) | `infrastructure/kubernetes/` |
 | **DB init scripts** | plain SQL that creates schemas and seed rows; both local MySQL and CI mount them | `infrastructure/config/db-init/` |
 | **API gateway** | one front door on port 8080 that forwards `/rest-api/**`, `/intake/**` etc. to the right service — a hand-rolled ~80-line proxy, deliberately not a framework | `api-gateway/` |
-| **GitHub Actions CI** | on every push, GitHub spins up a runner, starts MySQL with our real init scripts, runs `mvn verify` (compile + all tests, including full Spring context startup), and uploads the built jars | `.github/workflows/build.yml` |
+| **GitHub Actions CI** | on every push, GitHub spins up a runner, starts MySQL with our real init scripts, runs `mvn verify` (compile + all tests, including full Spring context startup), and uploads the built jars; a second job type-checks, tests, and builds the React app with Node | `.github/workflows/build.yml` |
 | **CodeQL** | GitHub's static security analysis - scans the Java code for vulnerability patterns on every PR and weekly | `.github/workflows/codeql.yml` |
 | **Dependabot** | opens PRs when Maven dependencies or Actions versions have updates (which often carry security fixes) | `.github/dependabot.yml` |
 
@@ -342,6 +430,9 @@ history and were caught exactly there.
 | How parsing decides company/position/status | `parser/HeuristicConfirmationEmailParser.java`, then `parser/claude/` |
 | How login works without passwords | `mvc-service/.../auth/OtpService.java` |
 | Who may access which page | `mvc-service/.../auth/SecurityConfig.java` |
+| How the React app is wired together | `frontend/src/App.tsx`, then `pages/DashboardPage.tsx` |
+| What JSON the SPA sends and receives | `mvc-service/.../api/` records + `frontend/src/api/types.ts` |
+| How a fetch call carries login + CSRF | `frontend/src/api/client.ts` |
 | Why another user's data is invisible | `mvc-service/.../service/JobApplicationServiceImpl.java` + `JobApplicationOwnershipTests` |
 | Where status changes are recorded and announced | `StatusHistory` entity + `intake-service/.../notify/` |
 | How a page gets its data | `controller/JobApplicationController.java` + matching template |

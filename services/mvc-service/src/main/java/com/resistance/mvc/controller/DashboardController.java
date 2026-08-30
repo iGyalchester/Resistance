@@ -3,6 +3,7 @@ package com.resistance.mvc.controller;
 import com.resistance.mvc.auth.LoginController;
 import com.resistance.mvc.dao.JobApplicationRepository;
 import com.resistance.mvc.dao.UserAccountRepository;
+import com.resistance.mvc.util.IntakeAddresses;
 import com.resistance.shared.models.entity.UserAccount;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,16 +42,8 @@ public class DashboardController {
 
         model.addAttribute("account", account);
         model.addAttribute("applications", applicationRepository.findByOwnerId(accountId));
-        model.addAttribute("intakeAddress", personalIntakeAddress(account.getIntakeAlias()));
+        model.addAttribute("intakeAddress",
+                IntakeAddresses.personal(intakeBaseAddress, account.getIntakeAlias()));
         return "dashboard";
-    }
-
-    // "track@domain" + alias "a8f3k2xq99" -> "track+a8f3k2xq99@domain"
-    private String personalIntakeAddress(String alias) {
-        int at = intakeBaseAddress.indexOf('@');
-        if (alias == null || alias.isBlank() || at < 0) {
-            return null;
-        }
-        return intakeBaseAddress.substring(0, at) + "+" + alias + intakeBaseAddress.substring(at);
     }
 }
