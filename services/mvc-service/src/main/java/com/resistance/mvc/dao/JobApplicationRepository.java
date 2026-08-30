@@ -10,6 +10,8 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
 
     List<JobApplication> findByOwnerId(int ownerId);
 
+    List<JobApplication> findByOwnerIdOrderByCompanyNameAsc(int ownerId);
+
 	// that's it ... no need to write any code LOL!
 
     // add a method to sort by company name

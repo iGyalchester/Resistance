@@ -56,7 +56,7 @@ public class ContactController {
 		return "redirect:/contacts/list";
 	}
 
-	@GetMapping("/delete")
+	@PostMapping("/delete")
 	public String delete(@RequestParam("contactId") int theId) {
 
 		contactRepository.deleteById(theId);

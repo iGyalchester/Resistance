@@ -2,9 +2,11 @@ package com.resistance.mvc.controller;
 
 import java.util.List;
 
+import com.resistance.mvc.auth.LoginController;
 import com.resistance.mvc.dao.ContactRepository;
 import com.resistance.mvc.service.JobApplicationService;
 
+import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -13,6 +15,11 @@ import com.resistance.shared.models.entity.ApplicationStatus;
 import com.resistance.shared.models.entity.Contact;
 import com.resistance.shared.models.entity.JobApplication;
 
+/**
+ * Owner-scoped application CRUD: every operation runs as the logged-in
+ * account (Spring Security guarantees one exists here), and the service
+ * layer refuses cross-account access.
+ */
 @Controller
 @RequestMapping("/applications")
 public class JobApplicationController {
@@ -27,6 +34,10 @@ public class JobApplicationController {
 		contactRepository = theContactRepository;
 	}
 
+	private int accountId(HttpSession session) {
+		return (Integer) session.getAttribute(LoginController.SESSION_ACCOUNT_ID);
+	}
+
 	// expose the status choices to the form's dropdown
 	@ModelAttribute("statuses")
 	public ApplicationStatus[] statuses() {
@@ -39,16 +50,10 @@ public class JobApplicationController {
 		return contactRepository.findAll();
 	}
 
-	// add mapping for "/list"
-
 	@GetMapping("/list")
-	public String listApplications(Model theModel) {
+	public String listApplications(HttpSession session, Model theModel) {
 
-		// get the applications from db
-		List<JobApplication> theApplications = applicationService.findAll();
-
-		// add to the spring model
-		theModel.addAttribute("applications", theApplications);
+		theModel.addAttribute("applications", applicationService.findAllForOwner(accountId(session)));
 
 		return "applications/list-applications";
 	}
@@ -56,55 +61,42 @@ public class JobApplicationController {
 	@GetMapping("/showFormForAdd")
 	public String showFormForAdd(Model theModel) {
 
-		// create model attribute to bind form data
-		JobApplication theJobApplication = new JobApplication();
-
-		theModel.addAttribute("application", theJobApplication);
+		theModel.addAttribute("application", new JobApplication());
 
 		return "applications/application-form";
 	}
 
 	@GetMapping("/showFormForUpdate")
 	public String showFormForUpdate(@RequestParam("applicationId") int theId,
-									Model theModel) {
+									HttpSession session, Model theModel) {
 
-		// get the application from the service
-		JobApplication theJobApplication = applicationService.findById(theId);
+		JobApplication theApplication =
+				applicationService.findByIdForOwner(theId, accountId(session))
+						.orElse(null);
+		if (theApplication == null) {
+			// not yours (or gone) - back to your list, no information leaked
+			return "redirect:/applications/list";
+		}
 
-		// set application as a model attribute to pre-populate the form
-		theModel.addAttribute("application", theJobApplication);
+		theModel.addAttribute("application", theApplication);
 
-		// send over to our form
 		return "applications/application-form";
 	}
 
 	@PostMapping("/save")
-	public String saveJobApplication(@ModelAttribute("application") JobApplication theJobApplication) {
+	public String saveApplication(@ModelAttribute("application") JobApplication theApplication,
+								  HttpSession session) {
 
-		// save the application
-		applicationService.save(theJobApplication);
+		applicationService.saveForOwner(theApplication, accountId(session));
 
-		// use a redirect to prevent duplicate submissions
 		return "redirect:/applications/list";
 	}
 
-	@GetMapping("/delete")
-	public String delete(@RequestParam("applicationId") int theId) {
+	@PostMapping("/delete")
+	public String delete(@RequestParam("applicationId") int theId, HttpSession session) {
 
-		// delete the application
-		applicationService.deleteById(theId);
+		applicationService.deleteByIdForOwner(theId, accountId(session));
 
-		// redirect to /applications/list
 		return "redirect:/applications/list";
-
 	}
 }
-
-
-
-
-
-
-
-
-
