@@ -1,0 +1,311 @@
+# Tech Guide — what everything is and why it's here
+
+A plain-language tour of every technology in this repo, written for someone
+who can read Java but hasn't met all of these tools before. Each section
+says **what** the thing is, **why** this project uses it, and **where** to
+see it in the code. Read it top to bottom once; after that, use the
+[cheat sheet](#cheat-sheet-where-to-look-when) at the bottom.
+
+---
+
+## The big picture
+
+The tracker's core trick: you never fill in a form. You forward a
+"we received your application" email, and a chain of services turns it
+into a row on your dashboard:
+
+```
+you forward an email
+   │
+   ▼
+intake-service ── parses "who applied where, and what happened"
+   │                 (regex first, Claude for the hard ones)
+   ▼
+MySQL ─────────── one job_application row, owned by your account
+   ▲
+   │
+mvc-service ───── the website: log in with a one-time code,
+                  see YOUR applications on /dashboard
+```
+
+Everything else in the repo supports that flow (shared code, deployment
+files, CI) or is a self-contained demo kept from the original course
+(core-service, the security demos, advanced-data-service, the ETL modules).
+
+---
+
+## Build & project structure
+
+### Maven multi-module build
+
+**What:** Maven is Java's build tool; a *multi-module* build is one parent
+`pom.xml` that lists many sub-projects ("modules") built together in
+dependency order.
+**Why:** the services share code (`shared/`), so they must build against
+the same versions in one command instead of 18 separate projects.
+**Where:** the root [`pom.xml`](../pom.xml) lists every module; each module's
+own `pom.xml` declares only what *it* needs. `mvn clean package` at the root
+builds everything.
+
+### Spring Boot
+
+**What:** the framework everything runs on. Its core idea is *dependency
+injection*: you declare classes as **beans** (`@Service`, `@Component`,
+`@Configuration` + `@Bean`) and Spring constructs them and passes them into
+each other's constructors — you never write `new IntakeService(...)`
+yourself, Spring does, with the right arguments.
+**Why:** wiring, configuration, web servers, and database access come
+mostly for free, so each service stays small.
+**Where:** every `*Application.java` is an entry point; look at
+`IntakeService`'s constructor to see injection: it just *declares* the
+repositories it needs, and Spring provides them.
+
+Two Spring patterns worth knowing here:
+
+- **`@Value("${some.property:default}")`** pulls a value from
+  `application.properties` (or an environment variable) into a constructor
+  argument. That's how `intake.require-alias` reaches the code.
+- **Conditional beans** (`@ConditionalOnProperty`, or an `if` inside a
+  `@Bean` method) mean a feature only exists when configured — e.g.
+  `ParserConfig` only builds the Claude parser when an API key is set.
+
+### Spring profiles (dev vs qa)
+
+**What:** a *profile* is a named set of extra configuration.
+`application.properties` is always loaded; `application-dev.properties`
+is added on top when the `dev` profile is active, `application-qa.properties`
+when `qa` is.
+**Why:** dev should run with zero setup (local MySQL, logged codes, open
+webhook); qa should *refuse to start* until real AWS resources are wired in.
+The qa file achieves that by using `${DB_HOST}` **without** a default —
+an unresolvable placeholder crashes startup, which is the point ("fail
+fast" beats silently running misconfigured).
+**Where:** `services/intake-service/src/main/resources/application-*.properties`
+and the same in mvc-service. `spring.profiles.default=dev` makes dev the
+no-flag default.
+
+---
+
+## The database layer
+
+### JPA / Hibernate (the `@Entity` classes)
+
+**What:** JPA is Java's standard for mapping classes to database tables;
+Hibernate is the engine that implements it. A class annotated `@Entity`
+with `@Table`/`@Column` mappings *is* a table row.
+**Why:** you write `applicationRepository.save(app)` instead of SQL.
+**Where:** `shared/shared-models/.../entity/` — `JobApplication` is the
+best one to read first: it shows an enum column
+(`@Enumerated(EnumType.STRING)` stores `"APPLIED"` as text, not a fragile
+number) and two **`@ManyToOne`** links (many applications → one Contact,
+many applications → one UserAccount), which become plain foreign-key
+columns (`contact_id`, `owner_account_id`) in MySQL.
+
+### Spring Data repositories (the interfaces with no code)
+
+**What:** an interface like
+`interface JobApplicationRepository extends JpaRepository<JobApplication, Integer>`
+gets a full implementation *generated at runtime* — save, findById, delete.
+Better: Spring parses **method names** into queries.
+`findByOwnerIdAndCompanyNameIgnoreCase(...)` becomes
+`WHERE owner_account_id = ? AND LOWER(company_name) = LOWER(?)`.
+**Why:** zero boilerplate — and one sharp edge: the name is only checked
+at *startup*, not compile time. (A stale `findAllByOrderByLastNameAsc`
+survived a rename here and would have crashed boot; CI caught it.)
+**Where:** every `dao/` package.
+
+### The JPA attribute converter (field encryption hook)
+
+**What:** an `AttributeConverter` sits between a Java field and its
+database column, transforming the value in both directions.
+**Why:** that's the seam where PII encryption lives — the code reads and
+writes `account.getPhone()` normally, while the *column* holds ciphertext.
+**Where:** `shared-models/.../EncryptedStringConverter.java`, applied with
+`@Convert` on `UserAccount.phone`. The crypto itself is below under
+[Encryption](#field-encryption-aes-gcm--kms).
+
+---
+
+## The web layer (mvc-service)
+
+### Spring MVC + Thymeleaf
+
+**What:** Spring MVC maps URLs to controller methods; Thymeleaf is the
+template engine — HTML files with `th:` attributes that get filled in
+server-side (`th:each` loops, `th:text` inserts, `th:field` binds a form
+input to a Java object's field).
+**Why:** simple server-rendered pages, no JavaScript framework needed.
+**Where:** `mvc-service/.../controller/` + `src/main/resources/templates/`.
+`JobApplicationController` + `applications/list-applications.html` is the
+canonical pair.
+
+### Sessions, the login interceptor
+
+**What:** an HTTP *session* is server-side memory tied to a browser cookie.
+After a successful login we store `accountId` in it; a `HandlerInterceptor`
+(a check that runs before matching requests) redirects anyone without that
+attribute away from `/dashboard`.
+**Where:** `auth/LoginController` (sets it), `auth/DashboardInterceptor` +
+`auth/WebConfig` (enforce it).
+
+### Passwordless OTP login
+
+**What/why:** users never chose a password (their account was created by
+forwarding an email), so login works by proving control of the email inbox:
+we send a 6-digit one-time code, they type it back. Security properties
+worth noticing in `auth/OtpService`:
+
+- only the **SHA-256 hash** of the code is stored — a database leak reveals
+  nothing usable;
+- codes expire in 10 minutes and allow 5 attempts;
+- requesting a code for an unknown email behaves *identically* to a known
+  one, so an attacker can't probe which emails have accounts
+  ("no account enumeration");
+- hashes are compared with `MessageDigest.isEqual`, which takes constant
+  time — a normal `equals` returns faster on early mismatches, and that
+  timing difference is measurable ("timing attack").
+
+**Where:** `mvc-service/.../auth/`. `OtpNotifier` is the delivery
+abstraction: a log-to-console implementation for dev, SMTP when
+`spring.mail.host` is configured.
+
+---
+
+## Email intake (intake-service)
+
+### The three inbound paths
+
+Servers can't receive email directly, so three adapters all normalize into
+one `InboundEmail` record and one `IntakeService.process(...)` flow:
+
+| Path | What it is | File |
+|---|---|---|
+| JSON webhook | An email provider (Mailgun/SendGrid/Postmark) POSTs each received email as JSON to us | `web/EmailIntakeController` |
+| AWS SES → SNS | AWS receives the email, publishes a notification, and SNS POSTs it to us (see [AWS section](#the-aws-pieces)) | `web/SnsIntakeController` |
+| IMAP polling | We log into an ordinary mailbox every minute and read unread mail — zero provider setup | `imap/ImapPollingService` |
+
+### Personal intake aliases (the trust model)
+
+**What:** "plus addressing" — mail servers deliver `track+anything@domain`
+to the same inbox as `track@domain`, and the `+anything` part rides along
+in the recipient header. Each account gets a random tag
+(`track+a8f3k2xq99@domain` is *your* address).
+**Why this matters for security:** the `From` header of an email is
+trivially fakeable, so it must never decide whose account an email lands
+in. The recipient alias can't be guessed, so *knowing your own alias* is
+what authorizes filing into your account. Mail to an unknown alias is
+dropped without creating anything.
+**Where:** `IntakeService.extractAlias(...)` and the routing block at the
+top of `process(...)`. In qa, `intake.require-alias=true` also disables
+the bare-address bootstrap path.
+
+### Parsing: heuristics first, Claude second
+
+**Heuristics** (`parser/HeuristicConfirmationEmailParser`): confirmation
+emails are formulaic, so ordered regular expressions extract company and
+position, phrase lists classify the email's meaning (rejection → REJECTED,
+invite → INTERVIEW, offer → OFFER), and the embedded forwarded `From:` line
+identifies a human recruiter to save as a Contact. Free, instant, offline,
+and fully unit-tested.
+
+**Claude** (`parser/claude/ClaudeConfirmationEmailParser`): when the
+heuristics find nothing *and* an `ANTHROPIC_API_KEY` is configured, the
+email goes to the Claude API (model `claude-opus-5`) through the official
+Anthropic Java SDK. Three things to understand about how it's done:
+
+1. **Structured output:** instead of asking for prose and hoping, we hand
+   the SDK a Java record (`ExtractedApplication`) and the API guarantees
+   the response matches that schema — `.outputConfig(ExtractedApplication.class)`
+   returns a *typed* object, no JSON string parsing.
+2. **The email is treated as hostile input:** the prompt wraps it in
+   `<email>` tags and pins Claude to extraction-only, so an email containing
+   "ignore previous instructions and..." is just text to describe. This is
+   the standard defense against *prompt injection*.
+3. **The model's output is also untrusted:** `sanitize(...)` caps field
+   lengths, parses the status against our enum, and regex-validates the
+   contact email before anything is persisted. Any API error or safety
+   refusal degrades to "could not parse" — the same as the heuristics
+   shrugging.
+
+`parser/FallbackConfirmationEmailParser` chains the two;
+`parser/ParserConfig` decides at startup which chain exists (no key = no
+Claude, fully offline).
+
+---
+
+## The AWS pieces
+
+Used only in qa/production; dev needs none of this.
+
+| Service | One-sentence explanation | Role here |
+|---|---|---|
+| **SES** (Simple Email Service) | AWS's email send/receive service | *Receives* mail for `track@yourdomain.com` (via an MX DNS record) and can also *send* our OTP emails over SMTP |
+| **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES publishes each received email to a topic; the topic POSTs it to `/intake/aws-sns` |
+| **S3** | file storage | keeps the raw email (30-day expiry) |
+| **KMS** (Key Management Service) | managed encryption keys | generates the data key used for field encryption (below) |
+| **CloudFormation** | infrastructure-as-code: a YAML file describing AWS resources, deployed as one "stack" | [`infrastructure/aws/ses-intake.yaml`](../infrastructure/aws/ses-intake.yaml) creates the whole SES→SNS chain in one command |
+
+### Why SNS messages are signature-verified
+
+Anyone who discovers our `/intake/aws-sns` URL can POST JSON to it, and
+*everything in that JSON* — including the topic name we allowlist — is
+attacker-writable. The one thing that can't be forged is the **signature**:
+AWS signs each message with a private key and includes a URL to the
+matching certificate. `aws/SnsSignatureVerifier` rebuilds the exact string
+AWS signed (the "canonical string" — specific fields in a specific order)
+and checks the RSA signature. One subtlety: the certificate URL is also in
+the attacker-writable body, so `UrlSigningKeyResolver` refuses any URL that
+isn't `https` on an `sns.<region>.amazonaws.com` host — otherwise an
+attacker signs with their own key and points us at their own certificate.
+
+### Field encryption (AES-GCM + KMS)
+
+**What:** `AesGcmFieldEncryptor` (in `shared-utils`) encrypts individual
+PII values with AES-256-GCM — a mode that both hides the value and detects
+tampering. Each value gets a random IV (so equal inputs produce different
+ciphertexts) and is stored as `enc:v1:<base64>`; anything without that
+prefix is treated as old plaintext and passed through, so turning
+encryption on doesn't break existing rows.
+**Where does the key come from?** Never from the app. You run
+`aws kms generate-data-key` once, store the result in Secrets Manager, and
+inject it as `TRACKER_ENC_KEY`. Dev runs without a key (plaintext, with a
+logged warning). The full ceremony is in
+[`infrastructure/aws/README.md`](../infrastructure/aws/README.md).
+
+---
+
+## Running & shipping
+
+| Thing | What it is | Where |
+|---|---|---|
+| **Docker / docker-compose** | containers = apps packaged with their environment; compose starts a whole set (MySQL + services + gateway) with one command | `infrastructure/docker-compose.yml`, generic image recipe in `infrastructure/docker/Dockerfile` |
+| **Kubernetes manifests** | YAML describing how a cluster should run the same containers (replicas, ports, env) | `infrastructure/kubernetes/` |
+| **DB init scripts** | plain SQL that creates schemas and seed rows; both local MySQL and CI mount them | `infrastructure/config/db-init/` |
+| **API gateway** | one front door on port 8080 that forwards `/rest-api/**`, `/intake/**` etc. to the right service — a hand-rolled ~80-line proxy, deliberately not a framework | `api-gateway/` |
+| **GitHub Actions CI** | on every push, GitHub spins up a runner, starts MySQL with our real init scripts, runs `mvn verify` (compile + all tests, including full Spring context startup), and uploads the built jars | `.github/workflows/build.yml` |
+
+The CI detail worth appreciating: because it boots a *real* MySQL with the
+*real* schemas, it catches whole classes of bugs a compile can't — wrong
+derived-query names, entities drifting from the SQL, demo runners assuming
+data that isn't seeded. All three have actually happened in this repo's
+history and were caught exactly there.
+
+---
+
+## Cheat sheet: where to look when...
+
+| You want to understand... | Read |
+|---|---|
+| How an email becomes a tracked application | `intake-service/.../service/IntakeService.java` (top to bottom) |
+| How parsing decides company/position/status | `parser/HeuristicConfirmationEmailParser.java`, then `parser/claude/` |
+| How login works without passwords | `mvc-service/.../auth/OtpService.java` |
+| How a page gets its data | `controller/JobApplicationController.java` + matching template |
+| What a table looks like | the `@Entity` class **and** its `CREATE TABLE` in `db-init/02-job-tracker.sql` |
+| Why qa won't start | `application-qa.properties` (placeholders with no defaults) |
+| What AWS resources exist | `infrastructure/aws/ses-intake.yaml` + its README |
+| What CI actually runs | `.github/workflows/build.yml` |
+| Where each course project went | the table at the bottom of the main [README](../README.md) |
+
+If a class puzzles you, its Javadoc comment states the *why*; the unit
+tests next to it (`src/test/java/...`) show the intended behavior with
+concrete examples — often the fastest explanation of all.

@@ -7,6 +7,11 @@ layout of ~150 standalone demo projects into a single Maven build with
 consolidated services, shared libraries, an ETL framework, and deployment
 infrastructure.
 
+> **New to some of this tech?** Read [docs/TECH-GUIDE.md](docs/TECH-GUIDE.md) -
+> a plain-language tour of every technology in the stack (Maven modules,
+> Spring, JPA, SES/SNS/KMS, the OTP login, the Claude parser, CI), each with
+> what it is, why it's here, and where to see it in the code.
+
 ## Domain model
 
 - **JobApplication** - the central tracked record: company, position, and an
