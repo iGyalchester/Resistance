@@ -4,6 +4,7 @@ import com.resistance.intake.dao.ContactRepository;
 import com.resistance.intake.dao.JobApplicationRepository;
 import com.resistance.intake.dao.StatusHistoryRepository;
 import com.resistance.intake.dao.UserAccountRepository;
+import com.resistance.intake.notify.StatusNotifier;
 import com.resistance.intake.parser.ConfirmationEmailParser;
 import com.resistance.intake.parser.ParsedApplication;
 import com.resistance.shared.models.entity.ApplicationStatus;
@@ -33,6 +34,7 @@ class IntakeServiceTests {
     private JobApplicationRepository applications;
     private ContactRepository contacts;
     private StatusHistoryRepository history;
+    private StatusNotifier notifier;
     private ConfirmationEmailParser parser;
     private IntakeService intakeService;
     private UserAccount account;
@@ -46,9 +48,10 @@ class IntakeServiceTests {
         applications = mock(JobApplicationRepository.class);
         contacts = mock(ContactRepository.class);
         history = mock(StatusHistoryRepository.class);
+        notifier = mock(StatusNotifier.class);
         parser = mock(ConfirmationEmailParser.class);
         intakeService = new IntakeService(accounts, applications, contacts, history, parser,
-                Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), false);
+                notifier, Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), false);
 
         account = new UserAccount("Boris Gerard", "boris@gmail.com");
         account.setId(7);
@@ -129,6 +132,26 @@ class IntakeServiceTests {
     }
 
     @Test
+    void notificationsFireOnCreateAndStatusChangeOnly() {
+        // create -> notified with null fromStatus
+        when(parser.parse(EMAIL)).thenReturn(Optional.of(
+                new ParsedApplication("Acme Corp", "Backend Engineer")));
+        when(applications.findByOwnerIdAndCompanyNameIgnoreCase(7, "Acme Corp")).thenReturn(List.of());
+        intakeService.process(EMAIL);
+        org.mockito.Mockito.verify(notifier)
+                .notifyChange(org.mockito.ArgumentMatchers.eq(account), any(JobApplication.class),
+                        org.mockito.ArgumentMatchers.isNull());
+
+        // duplicate forward (no change) -> no further notification
+        JobApplication existing = new JobApplication("Acme Corp", "Backend Engineer", ApplicationStatus.APPLIED);
+        existing.setId(42);
+        when(applications.findByOwnerIdAndCompanyNameIgnoreCase(7, "Acme Corp"))
+                .thenReturn(List.of(existing));
+        intakeService.process(EMAIL);
+        org.mockito.Mockito.verifyNoMoreInteractions(notifier);
+    }
+
+    @Test
     void existingContactLinkIsNeverOverwritten() {
         Contact original = new Contact("Existing", "Person", "existing@initech.com");
         JobApplication existing = new JobApplication("Initech", "Java Developer", ApplicationStatus.INTERVIEW);
@@ -178,7 +201,7 @@ class IntakeServiceTests {
     @Test
     void strictModeIgnoresBareAddressEmail() {
         IntakeService strict = new IntakeService(accounts, applications, contacts, history, parser,
-                Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), true);
+                notifier, Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), true);
 
         IntakeResult result = strict.process(EMAIL);
 

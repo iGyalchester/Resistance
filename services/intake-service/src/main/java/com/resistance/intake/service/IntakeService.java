@@ -3,6 +3,7 @@ package com.resistance.intake.service;
 import com.resistance.intake.dao.ContactRepository;
 import com.resistance.intake.dao.JobApplicationRepository;
 import com.resistance.intake.dao.StatusHistoryRepository;
+import com.resistance.intake.notify.StatusNotifier;
 import com.resistance.intake.dao.UserAccountRepository;
 import com.resistance.intake.parser.ConfirmationEmailParser;
 import com.resistance.intake.parser.ParsedApplication;
@@ -43,6 +44,7 @@ public class IntakeService {
     private final ContactRepository contactRepository;
     private final StatusHistoryRepository historyRepository;
     private final ConfirmationEmailParser parser;
+    private final StatusNotifier notifier;
     private final Clock clock;
     private final boolean requireAlias;
     private final SecureRandom random = new SecureRandom();
@@ -52,6 +54,7 @@ public class IntakeService {
                          ContactRepository contactRepository,
                          StatusHistoryRepository historyRepository,
                          ConfirmationEmailParser parser,
+                         StatusNotifier notifier,
                          Clock clock,
                          @Value("${intake.require-alias:false}") boolean requireAlias) {
         this.accountRepository = accountRepository;
@@ -59,6 +62,7 @@ public class IntakeService {
         this.contactRepository = contactRepository;
         this.historyRepository = historyRepository;
         this.parser = parser;
+        this.notifier = notifier;
         this.clock = clock;
         this.requireAlias = requireAlias;
     }
@@ -127,9 +131,11 @@ public class IntakeService {
             if (parsed.status() != application.getStatus()) {
                 log.info("Application #{} status {} -> {}", application.getId(),
                         application.getStatus(), parsed.status());
-                historyRepository.save(new StatusHistory(application, application.getStatus(),
+                ApplicationStatus previous = application.getStatus();
+                historyRepository.save(new StatusHistory(application, previous,
                         parsed.status(), clock.instant(), StatusHistory.SOURCE_INTAKE));
                 application.setStatus(parsed.status());
+                notifyQuietly(account, application, previous);
                 changed = true;
             }
             if (linkContact(application, parsed)) {
@@ -149,6 +155,7 @@ public class IntakeService {
             application = applicationRepository.save(application);
             historyRepository.save(new StatusHistory(application, null,
                     application.getStatus(), clock.instant(), StatusHistory.SOURCE_INTAKE));
+            notifyQuietly(account, application, null);
             outcome = "CREATED";
             log.info("Tracked new application #{} ({} - {}, {}) for {}", application.getId(),
                     parsed.companyName(), parsed.positionTitle(), application.getStatus(), senderAddress);
@@ -157,6 +164,17 @@ public class IntakeService {
         return new IntakeResult(outcome, application.getId(), application.getCompanyName(),
                 application.getPositionTitle(), application.getStatus(),
                 account.getEmail(), created[0], account.getIntakeAlias());
+    }
+
+    /** A notification failure must never fail the intake transaction. */
+    private void notifyQuietly(UserAccount account, JobApplication application,
+                               ApplicationStatus fromStatus) {
+        try {
+            notifier.notifyChange(account, application, fromStatus);
+        } catch (Exception e) {
+            log.warn("Failed to notify {} about application #{}", account.getEmail(),
+                    application.getId(), e);
+        }
     }
 
     /**
