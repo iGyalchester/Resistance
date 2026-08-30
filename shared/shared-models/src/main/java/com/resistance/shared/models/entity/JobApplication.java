@@ -34,6 +34,26 @@ public class JobApplication {
     @JoinColumn(name="owner_account_id")
     private UserAccount owner;
 
+    @Column(name="applied_at")
+    private java.time.Instant appliedAt;
+
+    @Column(name="updated_at")
+    private java.time.Instant updatedAt;
+
+    @PrePersist
+    void onCreate() {
+        java.time.Instant now = java.time.Instant.now();
+        if (appliedAt == null) {
+            appliedAt = now;
+        }
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = java.time.Instant.now();
+    }
+
 
     // define constructors
     public JobApplication() {
@@ -94,6 +114,29 @@ public class JobApplication {
 
     public void setOwner(UserAccount owner) {
         this.owner = owner;
+    }
+
+    public java.time.Instant getAppliedAt() {
+        return appliedAt;
+    }
+
+    public void setAppliedAt(java.time.Instant appliedAt) {
+        this.appliedAt = appliedAt;
+    }
+
+    public java.time.Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(java.time.Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    // display helper for templates ("2026-08-30" or blank)
+    @Transient
+    public java.time.LocalDate getAppliedOn() {
+        return appliedAt == null ? null
+                : java.time.LocalDate.ofInstant(appliedAt, java.time.ZoneOffset.UTC);
     }
 
     // define toString

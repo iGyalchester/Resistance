@@ -44,6 +44,7 @@
                 <th>Company</th>
                 <th>Position</th>
                 <th>Status</th>
+                <th>Applied</th>
                 <th>Contact</th>
             </tr>
         </thead>
@@ -53,6 +54,7 @@
                 <td th:text="${tempApplication.companyName}" />
                 <td th:text="${tempApplication.positionTitle != null ? tempApplication.positionTitle : '-'}" />
                 <td th:text="${tempApplication.status}" />
+                <td th:text="${tempApplication.appliedOn != null ? tempApplication.appliedOn : '-'}" />
                 <td th:text="${tempApplication.contact != null ? tempApplication.contact.firstName + ' ' + tempApplication.contact.lastName : '-'}" />
             </tr>
         </tbody>

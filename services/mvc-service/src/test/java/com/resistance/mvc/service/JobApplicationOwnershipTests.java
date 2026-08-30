@@ -1,13 +1,18 @@
 package com.resistance.mvc.service;
 
 import com.resistance.mvc.dao.JobApplicationRepository;
+import com.resistance.mvc.dao.StatusHistoryRepository;
 import com.resistance.mvc.dao.UserAccountRepository;
 import com.resistance.shared.models.entity.ApplicationStatus;
 import com.resistance.shared.models.entity.JobApplication;
+import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -24,6 +29,7 @@ class JobApplicationOwnershipTests {
 
     private JobApplicationRepository applications;
     private UserAccountRepository accounts;
+    private StatusHistoryRepository history;
     private JobApplicationServiceImpl service;
 
     private UserAccount me;
@@ -34,7 +40,10 @@ class JobApplicationOwnershipTests {
     void setUp() {
         applications = mock(JobApplicationRepository.class);
         accounts = mock(UserAccountRepository.class);
-        service = new JobApplicationServiceImpl(applications, accounts);
+        history = mock(StatusHistoryRepository.class);
+        service = new JobApplicationServiceImpl(applications, accounts, history,
+                Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC));
+        when(applications.save(any(JobApplication.class))).thenAnswer(inv -> inv.getArgument(0));
 
         me = new UserAccount("Me", "me@example.com");
         me.setId(1);
@@ -87,5 +96,32 @@ class JobApplicationOwnershipTests {
 
         assertSame(me, mine.getOwner());
         verify(applications).save(mine);
+    }
+
+    @Test
+    void manualStatusChangeIsRecordedInHistory() {
+        JobApplication mine = new JobApplication("Acme Corp", "Backend Engineer", ApplicationStatus.INTERVIEW);
+        mine.setId(42);
+        theirs.setOwner(me); // row 42 belongs to me in this test
+
+        service.saveForOwner(mine, 1);
+
+        org.mockito.ArgumentCaptor<StatusHistory> recorded =
+                org.mockito.ArgumentCaptor.forClass(StatusHistory.class);
+        verify(history).save(recorded.capture());
+        assertEquals(ApplicationStatus.APPLIED, recorded.getValue().getFromStatus());
+        assertEquals(ApplicationStatus.INTERVIEW, recorded.getValue().getToStatus());
+        assertEquals(StatusHistory.SOURCE_MANUAL, recorded.getValue().getSource());
+    }
+
+    @Test
+    void unchangedStatusRecordsNoHistory() {
+        JobApplication mine = new JobApplication("Acme Corp", "Backend Engineer", ApplicationStatus.APPLIED);
+        mine.setId(42);
+        theirs.setOwner(me);
+
+        service.saveForOwner(mine, 1);
+
+        verify(history, never()).save(any());
     }
 }
