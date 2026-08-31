@@ -1,6 +1,7 @@
 package com.resistance.mvc.auth;
 
 import com.resistance.shared.models.entity.UserAccount;
+import com.resistance.shared.utils.audit.AuditEventClient;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -34,15 +35,18 @@ public class LoginController {
     private final SessionAuthenticator sessionAuthenticator;
     private final OtpRequestThrottle emailThrottle;
     private final OtpRequestThrottle ipThrottle;
+    private final AuditEventClient audit;
 
     public LoginController(OtpService otpService,
                            SessionAuthenticator sessionAuthenticator,
                            OtpRequestThrottle emailOtpThrottle,
-                           OtpRequestThrottle ipOtpThrottle) {
+                           OtpRequestThrottle ipOtpThrottle,
+                           AuditEventClient auditEventClient) {
         this.otpService = otpService;
         this.sessionAuthenticator = sessionAuthenticator;
         this.emailThrottle = emailOtpThrottle;
         this.ipThrottle = ipOtpThrottle;
+        this.audit = auditEventClient;
     }
 
     @GetMapping("/login")
@@ -64,6 +68,8 @@ public class LoginController {
             log.warn("OTP request throttled for {}", request.getRemoteAddr());
         }
 
+        audit.emit("AUTH_EVENT", "OTP_REQUESTED", email.trim().toLowerCase(),
+                "login", request.getRemoteAddr());
         session.setAttribute(SESSION_LOGIN_EMAIL, email.trim());
         return "redirect:/login/code";
     }
@@ -90,6 +96,8 @@ public class LoginController {
 
         Optional<UserAccount> account = otpService.verify(email, code);
         if (account.isEmpty()) {
+            audit.emit("AUTH_EVENT", "LOGIN_FAILURE", email.toLowerCase(),
+                    "login", request.getRemoteAddr());
             model.addAttribute("email", email);
             model.addAttribute("loginError", "That code didn't work. Check it or request a new one.");
             return "login-code";
@@ -97,6 +105,8 @@ public class LoginController {
 
         session.removeAttribute(SESSION_LOGIN_EMAIL);
         sessionAuthenticator.establish(account.get(), request, response);
+        audit.emit("AUTH_EVENT", "LOGIN_SUCCESS", account.get().getEmail(),
+                "login", request.getRemoteAddr());
 
         return "redirect:/dashboard";
     }

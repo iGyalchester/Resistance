@@ -12,6 +12,7 @@ import com.resistance.shared.models.entity.Contact;
 import com.resistance.shared.models.entity.JobApplication;
 import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
+import com.resistance.shared.utils.audit.AuditEventClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +48,7 @@ public class IntakeService {
     private final StatusNotifier notifier;
     private final Clock clock;
     private final boolean requireAlias;
+    private final AuditEventClient audit;
     private final SecureRandom random = new SecureRandom();
 
     public IntakeService(UserAccountRepository accountRepository,
@@ -56,7 +58,8 @@ public class IntakeService {
                          ConfirmationEmailParser parser,
                          StatusNotifier notifier,
                          Clock clock,
-                         @Value("${intake.require-alias:false}") boolean requireAlias) {
+                         @Value("${intake.require-alias:false}") boolean requireAlias,
+                         AuditEventClient auditEventClient) {
         this.accountRepository = accountRepository;
         this.applicationRepository = applicationRepository;
         this.contactRepository = contactRepository;
@@ -65,6 +68,7 @@ public class IntakeService {
         this.notifier = notifier;
         this.clock = clock;
         this.requireAlias = requireAlias;
+        this.audit = auditEventClient;
     }
 
     @Transactional
@@ -103,6 +107,9 @@ public class IntakeService {
             if (account.getIntakeAlias() == null) {
                 account.setIntakeAlias(generateAlias());
                 account = accountRepository.save(account);
+            }
+            if (created[0]) {
+                audit.emit("AUTH_EVENT", "ACCOUNT_PROVISIONED", account.getEmail(), "user_account", null);
             }
         }
 
@@ -143,6 +150,8 @@ public class IntakeService {
             }
             if (changed) {
                 application = applicationRepository.save(application);
+                audit.emit("DATABASE_QUERY", "INTAKE_UPDATE", account.getEmail(),
+                        "job_application:" + application.getId(), null);
                 outcome = "UPDATED";
             } else {
                 outcome = "ALREADY_TRACKED";
@@ -156,6 +165,8 @@ public class IntakeService {
             historyRepository.save(new StatusHistory(application, null,
                     application.getStatus(), clock.instant(), StatusHistory.SOURCE_INTAKE));
             notifyQuietly(account, application, null);
+            audit.emit("DATABASE_QUERY", "INTAKE_CREATE", account.getEmail(),
+                    "job_application:" + application.getId(), null);
             outcome = "CREATED";
             log.info("Tracked new application #{} ({} - {}, {}) for {}", application.getId(),
                     parsed.companyName(), parsed.positionTitle(), application.getStatus(), senderAddress);

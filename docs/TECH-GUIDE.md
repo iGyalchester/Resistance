@@ -361,6 +361,47 @@ without any mail server.
 
 ---
 
+## Audit events out to AuditFlow
+
+### What and why
+
+Resistance now *emits* audit events - one line per security-relevant
+moment - to the owner's other project,
+[AuditFlow](https://github.com/iGyalchester/auditflow-platform), a
+compliance-monitoring platform. Every OTP request, login success/failure,
+application create/update/delete, profile (PII) access, and intake
+provisioning becomes an `AuditEvent` that AuditFlow classifies against
+SOC 2/GDPR controls, stores as evidence, and can alert on (e.g. a rule
+flagging repeated LOGIN_FAILUREs). This answers the question every
+multi-user PII-holding app eventually gets asked: *who did what, when?*
+
+### How it works
+
+`AuditEventClient` (in `shared/shared-utils`, pure JDK - no new
+dependencies) POSTs JSON to AuditFlow's ingestion endpoint with a shared
+`X-Audit-Token` secret. Three properties control it
+(`tracker.audit.url/token/customer-id`); a blank URL disables it, which is
+the dev default. Two design rules worth internalizing:
+
+- **Auditing must never break the app.** Emission is asynchronous with a
+  2-second timeout and swallows every failure (logged, dropped). That
+  makes delivery *at-most-once* - an honest, documented tradeoff. The
+  "real" compliance answer is a transactional outbox (events written to
+  our DB in the same transaction, relayed with retries); that's future
+  work, chosen against for v1 simplicity.
+- **Emit at the seams that already enforce security.** The calls sit in
+  LoginController/AuthApiController (auth), JobApplicationServiceImpl
+  (the owner-scoping boundary), ProfileController (encrypted PII), and
+  IntakeService (provisioning) - the same choke points the security model
+  already flows through, so nothing can be audited inconsistently.
+
+**Where:** `shared-utils/.../audit/AuditEventClient.java` (with its own
+test suite incl. a hung-server test proving emit never blocks),
+`mvc-service/.../audit/AuditConfig.java`, and the emit calls at those
+seams. The full two-system walkthrough lives in `docs/E2E-TEST-PLAN.md`.
+
+---
+
 ## The AWS pieces
 
 Used only in qa/production; dev needs none of this.
@@ -433,6 +474,7 @@ history and were caught exactly there.
 | How the React app is wired together | `frontend/src/App.tsx`, then `pages/DashboardPage.tsx` |
 | What JSON the SPA sends and receives | `mvc-service/.../api/` records + `frontend/src/api/types.ts` |
 | How a fetch call carries login + CSRF | `frontend/src/api/client.ts` |
+| What gets audited and where events go | `shared-utils/.../audit/AuditEventClient.java` + `docs/E2E-TEST-PLAN.md` |
 | Why another user's data is invisible | `mvc-service/.../service/JobApplicationServiceImpl.java` + `JobApplicationOwnershipTests` |
 | Where status changes are recorded and announced | `StatusHistory` entity + `intake-service/.../notify/` |
 | How a page gets its data | `controller/JobApplicationController.java` + matching template |

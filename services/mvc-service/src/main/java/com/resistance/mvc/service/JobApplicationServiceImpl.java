@@ -13,6 +13,7 @@ import com.resistance.shared.models.entity.ApplicationStatus;
 import com.resistance.shared.models.entity.JobApplication;
 import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
+import com.resistance.shared.utils.audit.AuditEventClient;
 
 @Service
 public class JobApplicationServiceImpl implements JobApplicationService {
@@ -21,15 +22,18 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 	private final UserAccountRepository accountRepository;
 	private final StatusHistoryRepository historyRepository;
 	private final Clock clock;
+	private final AuditEventClient audit;
 
 	public JobApplicationServiceImpl(JobApplicationRepository theJobApplicationRepository,
 									 UserAccountRepository theUserAccountRepository,
 									 StatusHistoryRepository theStatusHistoryRepository,
-									 Clock theClock) {
+									 Clock theClock,
+									 AuditEventClient theAuditEventClient) {
 		applicationRepository = theJobApplicationRepository;
 		accountRepository = theUserAccountRepository;
 		historyRepository = theStatusHistoryRepository;
 		clock = theClock;
+		audit = theAuditEventClient;
 	}
 
 	@Override
@@ -71,6 +75,9 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 			historyRepository.save(new StatusHistory(saved, previousStatus,
 					saved.getStatus(), clock.instant(), StatusHistory.SOURCE_MANUAL));
 		}
+
+		audit.emit("DATABASE_QUERY", isNew ? "CREATE" : "UPDATE", owner.getEmail(),
+				"job_application:" + saved.getId(), null);
 	}
 
 	@Override
@@ -80,6 +87,8 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 			return false;
 		}
 		applicationRepository.deleteById(theId);
+		audit.emit("DATABASE_QUERY", "DELETE",
+				owned.get().getOwner().getEmail(), "job_application:" + theId, null);
 		return true;
 	}
 
