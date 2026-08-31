@@ -19,7 +19,7 @@ CREATE TABLE `members` (
 --
 -- NOTE: The passwords are encrypted using BCrypt
 --
--- A generation tool is avail at: https://www.luv2code.com/generate-bcrypt-password
+-- Generate bcrypt hashes with e.g.: htpasswd -bnBC 10 "" <password>
 --
 -- Default passwords here are: fun123
 --

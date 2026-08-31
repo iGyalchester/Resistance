@@ -29,8 +29,8 @@ mvc-service ───── the website: log in with a one-time code,
 ```
 
 Everything else in the repo supports that flow (shared code, deployment
-files, CI) or is a self-contained demo kept from the original course
-(core-service, the security demos, advanced-data-service, the ETL modules).
+files, CI) or is a self-contained learning demo (core-service, the
+security demos, advanced-data-service, the ETL modules).
 
 ---
 
@@ -241,7 +241,7 @@ verified code into an authenticated session for both. Entities never go on
 the wire — flat records (`ApplicationView`, `MeView`) do, so lazy-loading
 proxies and fields like the owner link can't leak by accident.
 **Why not rest-api-service?** that module (port 8083) is the unsecured
-course demo. The real API lives where the security machinery already is.
+legacy demo. The real API lives where the security machinery already is.
 **Where:** `api/AuthApiController.java`, `api/ApplicationApiController.java`,
 tests in `src/test/java/com/resistance/mvc/api/`.
 
@@ -482,7 +482,6 @@ history and were caught exactly there.
 | Why qa won't start | `application-qa.properties` (placeholders with no defaults) |
 | What AWS resources exist | `infrastructure/aws/ses-intake.yaml` + its README |
 | What CI actually runs | `.github/workflows/build.yml` |
-| Where each course project went | the table at the bottom of the main [README](../README.md) |
 
 If a class puzzles you, its Javadoc comment states the *why*; the unit
 tests next to it (`src/test/java/...`) show the intended behavior with

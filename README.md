@@ -1,11 +1,9 @@
 # Resistance
 
-A job application tracker built as a Spring Boot multi-module monorepo,
-refactored from the original
-[darbyluv2code Spring Boot course](https://github.com/darbyluv2code/spring-boot-3-spring-6-hibernate-for-beginners)
-layout of ~150 standalone demo projects into a single Maven build with
-consolidated services, shared libraries, an ETL framework, and deployment
-infrastructure.
+A job application tracker built as a Spring Boot multi-module monorepo:
+consolidated services, shared libraries, an ETL framework, a React
+frontend, and deployment infrastructure - with email-driven intake and
+passwordless login at its core.
 
 > **New to some of this tech?** Read [docs/TECH-GUIDE.md](docs/TECH-GUIDE.md) -
 > a plain-language tour of every technology in the stack (Maven modules,
@@ -230,8 +228,8 @@ What is actually in place today:
   `@Convert(converter = EncryptedStringConverter.class)`. Fields used as
   lookup keys (account/contact email) stay plaintext for now - encrypting
   them needs deterministic encryption or a hash column first.
-- **security-service / mvc-security-service**: the course-derived HTTP Basic
-  and form-login demos with JDBC users, roles and bcrypt.
+- **security-service / mvc-security-service**: standalone HTTP Basic and
+  form-login demos with JDBC users, roles and bcrypt.
 
 - **Supply chain**: Dependabot watches Maven and Actions versions; CodeQL
   scans the Java code on PRs and weekly. Enable branch protection on
@@ -239,7 +237,7 @@ What is actually in place today:
   live in the codebase.
 
 Remaining known gaps: `rest-api-service` (port 8083) is the *unsecured
-course demo* of the REST API - its secured twin is `security-service` -
+legacy demo* of the REST API - its secured twin is `security-service` -
 so never expose 8083 publicly; TLS terminates at the ALB/gateway, not
 in-app; dev DB credentials sit in property files (qa takes everything
 from the environment).
@@ -281,25 +279,8 @@ By default it processes the bundled `sample-data/applications.csv` in dry-run
 mode. Set `etl.dry-run=false` to write to the database and
 `etl.input-location=file:/path/to/file.csv` to point at your own data.
 
-## Where the course projects went
+## Origin
 
-Each service is the final, most complete project of its course section,
-repackaged under `com.resistance.*`, renamed into the job tracker domain
-(Employee -> JobApplication, Student -> Contact, Instructor -> Recruiter,
-Course -> JobPosting, Review -> Note), with entities, validation, and
-exceptions extracted into `shared/`:
-
-| Module | Origin |
-|---|---|
-| core-service | 02-spring-boot-spring-core / 09-java-config-bean |
-| data-service | 03-spring-boot-hibernate-jpa-crud / 08-create-db-tables-automatically |
-| rest-api-service | 04-spring-boot-rest-crud / 16-employee-with-spring-data-jpa (+ global exception handling from 06) |
-| security-service | 05-spring-boot-rest-security / 07-jdbc-bcrypt-custom-table-names |
-| mvc-service | 07-spring-boot-spring-mvc-crud / 04-01-employees-delete (+ validation demo from 06 / 20) |
-| mvc-security-service | 08-spring-boot-spring-mvc-security / 13-jdbc-bcrypt-custom-tables |
-| advanced-data-service | 09-spring-boot-jpa-advanced-mappings / 21-many-to-many-add-more-courses |
-| shared-validation | 06-spring-boot-spring-mvc / 20-validationdemo-custom-validation-rule |
-
-The original numbered course directories (including sections 01, 10, 11, 12
-that had no target module) remain available in git history prior to this
-refactor.
+The domain model (applications, contacts, recruiters, postings) was
+originally seeded from a Spring Boot course codebase; it has since been
+fully rewritten and extended into the tracker documented above.

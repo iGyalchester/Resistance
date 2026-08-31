@@ -3,8 +3,9 @@
 ## What this is
 
 A production-style **job application tracker**, built as a Spring Boot 4
-multi-module Maven monorepo (Java 26) refactored from the darbyluv2code
-course projects. The core product idea: forward a "we received your
+multi-module Maven monorepo (Java 26). The domain model was originally
+seeded from a Spring Boot course codebase and has since been fully
+rewritten. The core product idea: forward a "we received your
 application" email to your personal intake address (`track+<alias>@domain`)
 and the tracker parses it, files it under your auto-provisioned account,
 and follows the status over time. Login is passwordless (emailed one-time
@@ -52,7 +53,7 @@ technology in the stack, kept current by convention (see below).
   SES→SNS (signature-verified), or IMAP; heuristic parsing with optional
   Claude fallback; the recipient **alias is the trust anchor**, never the
   From header.
-- `services/rest-api-service` (8083) — deliberately **unsecured course
+- `services/rest-api-service` (8083) — deliberately **unsecured legacy
   demo**; never expose it publicly.
 - `infrastructure/` — docker-compose, Kubernetes, SES CloudFormation,
   and `config/db-init/` (the SQL schema source of truth).
