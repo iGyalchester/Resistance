@@ -145,7 +145,7 @@ tmp/
 ################################################################################
 
 .claude/
-CLAUDE.md
+# CLAUDE.md is committed intentionally - project context for Claude sessions
 
 
 ################################################################################
