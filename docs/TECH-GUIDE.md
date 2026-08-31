@@ -139,14 +139,27 @@ input to a Java object's field).
 `JobApplicationController` + `applications/list-applications.html` is the
 canonical pair.
 
-### Sessions, the login interceptor
+### Spring Security (sessions, CSRF, who may see what)
 
-**What:** an HTTP *session* is server-side memory tied to a browser cookie.
-After a successful login we store `accountId` in it; a `HandlerInterceptor`
-(a check that runs before matching requests) redirects anyone without that
-attribute away from `/dashboard`.
-**Where:** `auth/LoginController` (sets it), `auth/DashboardInterceptor` +
-`auth/WebConfig` (enforce it).
+**What:** the framework that decides which requests need a logged-in user.
+Our `SecurityConfig` says: everything except `/login/**` requires an
+authenticated *session* (server-side memory tied to a browser cookie);
+anonymous visitors get redirected to the login page. Logging in rotates the
+session id (blocking "session fixation" attacks) and stores a security
+context that the framework checks on every request.
+**CSRF** ("cross-site request forgery"): a malicious site can make your
+browser submit forms to ours using your cookie. Spring Security's defense -
+a secret token required in every state-changing POST - is on, and Thymeleaf
+injects the token into every `th:action` form automatically. That's also
+why deletes are POST forms instead of links: a GET that changes state can
+be triggered by a simple `<img>` tag.
+**Owner-scoping:** the multi-user boundary lives in
+`JobApplicationServiceImpl` - every query and mutation takes the acting
+account's id, and someone else's application is indistinguishable from a
+missing one. The tests in `JobApplicationOwnershipTests` demonstrate each
+denied path.
+**Where:** `mvc-service/.../auth/SecurityConfig.java`,
+`auth/LoginController.java`, `service/JobApplicationServiceImpl.java`.
 
 ### Passwordless OTP login
 
@@ -164,6 +177,12 @@ worth noticing in `auth/OtpService`:
 - hashes are compared with `MessageDigest.isEqual`, which takes constant
   time — a normal `equals` returns faster on early mismatches, and that
   timing difference is measurable ("timing attack").
+
+- code **requests are rate-limited** (`OtpRequestThrottle`): 3 per email
+  per 15 minutes and 10 per IP per hour, with identical responses when
+  throttled so an attacker learns nothing - this stops OTP inbox-bombing;
+- expired codes are swept hourly by `LoginCodePurgeJob` so the table
+  doesn't grow forever.
 
 **Where:** `mvc-service/.../auth/`. `OtpNotifier` is the delivery
 abstraction: a log-to-console implementation for dev, SMTP when
@@ -231,6 +250,27 @@ Anthropic Java SDK. Three things to understand about how it's done:
 `parser/ParserConfig` decides at startup which chain exists (no key = no
 Claude, fully offline).
 
+### Status history & notifications
+
+**What:** every status transition is recorded as a `status_history` row
+(`from_status` NULL marks creation, `source` says whether an email or a
+manual edit drove it), and `JobApplication` carries `applied_at`/`updated_at`
+timestamps set by *JPA lifecycle callbacks* (`@PrePersist`/`@PreUpdate` -
+methods the persistence layer runs automatically around saves).
+**Why:** the history table is the raw material for funnel metrics
+(time-in-stage, response rates), and it means a status overwrite never
+loses information.
+**Notifications:** when intake creates or moves an application, a
+`StatusNotifier` tells the owner ("Acme Corp moved to INTERVIEW") - logged
+in dev, emailed when SMTP is configured; a notification failure never
+fails the intake itself. An opt-in `WeeklyDigestJob`
+(`tracker.digest.enabled=true`) sends a Monday summary per account.
+Message text lives in `Notifications` as pure functions so it's testable
+without any mail server.
+**Where:** `shared-models/.../StatusHistory.java`,
+`intake-service/.../notify/`, recording in `IntakeService` and
+`mvc-service/.../JobApplicationServiceImpl`.
+
 ---
 
 ## The AWS pieces
@@ -283,6 +323,8 @@ logged warning). The full ceremony is in
 | **DB init scripts** | plain SQL that creates schemas and seed rows; both local MySQL and CI mount them | `infrastructure/config/db-init/` |
 | **API gateway** | one front door on port 8080 that forwards `/rest-api/**`, `/intake/**` etc. to the right service — a hand-rolled ~80-line proxy, deliberately not a framework | `api-gateway/` |
 | **GitHub Actions CI** | on every push, GitHub spins up a runner, starts MySQL with our real init scripts, runs `mvn verify` (compile + all tests, including full Spring context startup), and uploads the built jars | `.github/workflows/build.yml` |
+| **CodeQL** | GitHub's static security analysis - scans the Java code for vulnerability patterns on every PR and weekly | `.github/workflows/codeql.yml` |
+| **Dependabot** | opens PRs when Maven dependencies or Actions versions have updates (which often carry security fixes) | `.github/dependabot.yml` |
 
 The CI detail worth appreciating: because it boots a *real* MySQL with the
 *real* schemas, it catches whole classes of bugs a compile can't — wrong
@@ -299,6 +341,9 @@ history and were caught exactly there.
 | How an email becomes a tracked application | `intake-service/.../service/IntakeService.java` (top to bottom) |
 | How parsing decides company/position/status | `parser/HeuristicConfirmationEmailParser.java`, then `parser/claude/` |
 | How login works without passwords | `mvc-service/.../auth/OtpService.java` |
+| Who may access which page | `mvc-service/.../auth/SecurityConfig.java` |
+| Why another user's data is invisible | `mvc-service/.../service/JobApplicationServiceImpl.java` + `JobApplicationOwnershipTests` |
+| Where status changes are recorded and announced | `StatusHistory` entity + `intake-service/.../notify/` |
 | How a page gets its data | `controller/JobApplicationController.java` + matching template |
 | What a table looks like | the `@Entity` class **and** its `CREATE TABLE` in `db-init/02-job-tracker.sql` |
 | Why qa won't start | `application-qa.properties` (placeholders with no defaults) |

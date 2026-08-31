@@ -116,8 +116,11 @@ forward that email to your tracker's intake address. `intake-service` then
    Rejections flip the application to `REJECTED`, interview invites to
    `INTERVIEW`, offers to `OFFER`; a human recruiter's reply is captured
    as a linked Contact.
-3. creates or updates the **JobApplication** accordingly. Forwarding the
-   same confirmation twice is a no-op.
+3. creates or updates the **JobApplication** accordingly, records every
+   status transition in **status_history** (fuel for funnel metrics), and
+   notifies you ("Acme Corp moved to INTERVIEW" - logged in dev, emailed
+   when SMTP is configured; `tracker.digest.enabled=true` adds a Monday
+   weekly summary). Forwarding the same confirmation twice is a no-op.
 
 Three inbound paths feed the same flow - pick whichever fits:
 
@@ -164,10 +167,15 @@ login, `/dashboard` shows only your applications.
 
 What is actually in place today:
 
-- **Passwordless OTP login** (mvc-service): codes stored as SHA-256 hashes
-  only, 10-minute expiry, 5 attempts, one active code per account,
-  constant-time comparison, no account enumeration; `/dashboard` is
-  session-gated.
+- **Spring Security across mvc-service**: every page except the login flow
+  requires an authenticated session; application data is owner-scoped at
+  the service layer (another user's rows are indistinguishable from
+  missing ones); CSRF protection is on and deletes are POSTs; login
+  rotates the session id.
+- **Passwordless OTP login**: codes stored as SHA-256 hashes only,
+  10-minute expiry, 5 attempts, one active code per account, constant-time
+  comparison, no account enumeration - and code requests are rate-limited
+  per email and per IP. Expired codes are purged hourly.
 - **Intake hardening**: the webhook requires an `X-Intake-Token` shared
   secret; the SNS endpoint **verifies the SNS message signature** (RSA
   against the AWS signing certificate, cert-URL host pinned to
@@ -187,11 +195,16 @@ What is actually in place today:
 - **security-service / mvc-security-service**: the course-derived HTTP Basic
   and form-login demos with JDBC users, roles and bcrypt.
 
-Known gaps, deliberately open in this phase: the admin-style `/applications`
-and `/contacts` pages and the REST API are unauthenticated (dev
-convenience); there is no TLS termination in-app (terminate at the ALB/
-gateway); DB credentials sit in dev property files (qa takes them from the
-environment).
+- **Supply chain**: Dependabot watches Maven and Actions versions; CodeQL
+  scans the Java code on PRs and weekly. Enable branch protection on
+  `main` (require the Build check) in the repo settings - that part can't
+  live in the codebase.
+
+Remaining known gaps: `rest-api-service` (port 8083) is the *unsecured
+course demo* of the REST API - its secured twin is `security-service` -
+so never expose 8083 publicly; TLS terminates at the ALB/gateway, not
+in-app; dev DB credentials sit in property files (qa takes everything
+from the environment).
 
 ## Production database (decision pending)
 

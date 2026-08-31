@@ -8,4 +8,6 @@ import java.util.List;
 public interface JobApplicationRepository extends JpaRepository<JobApplication, Integer> {
 
     List<JobApplication> findByOwnerIdAndCompanyNameIgnoreCase(int ownerId, String companyName);
+
+    List<JobApplication> findByOwnerId(int ownerId);
 }
