@@ -58,6 +58,8 @@ Resistance/
 │   ├── aws/                       SES inbound -> SNS CloudFormation stack + guide
 │   └── config/db-init/            Database schemas and seed data
 │
+├── frontend/                      React + TypeScript SPA (login + dashboard, Vite)
+│
 └── api-gateway/                   Routes /{service}/** to the matching service (port 8080)
 ```
 
@@ -149,6 +151,42 @@ Codes are stored hashed, expire after 10 minutes, and allow 5 attempts. With no
 SMTP configured the code is printed in the mvc-service log (dev mode); set
 `spring.mail.*` (any SMTP server, including AWS SES's) for real delivery. After
 login, `/dashboard` shows only your applications.
+
+## React front end
+
+`frontend/` is a React 19 + TypeScript single-page app (Vite) covering the
+login flow and a read-only dashboard so far. It talks to a JSON API in
+mvc-service (`/api/auth/*`, `/api/applications`) that reuses the exact same
+OTP service, throttles, session auth, and owner-scoping as the Thymeleaf
+pages — the two UIs run side by side until the React app reaches parity.
+
+```bash
+# terminal 1: the backend (needs MySQL, see "Running locally")
+mvn -pl services/mvc-service -am spring-boot:run
+
+# terminal 2: the frontend with hot reload
+cd frontend
+npm install
+npm run dev          # http://localhost:5173, /api proxied to :8085
+```
+
+`npm run build` type-checks (`tsc`) and produces static files in
+`frontend/dist/`; `npm test` runs the Vitest + React Testing Library suite.
+CI builds and tests the frontend in its own job.
+
+| Endpoint | What |
+|---|---|
+| `POST /api/auth/code` | Request a login code (same generic answer for any address) |
+| `POST /api/auth/login` | Verify the code; authenticates the session, returns the user |
+| `GET /api/auth/me` | Who is logged in (401 when nobody) |
+| `POST /api/auth/logout` | End the session |
+| `GET /api/applications` | The session owner's applications |
+
+Auth is the session cookie itself — no tokens. CSRF tokens ride in the
+readable `XSRF-TOKEN` cookie and come back as an `X-XSRF-TOKEN` header;
+anonymous `/api/**` calls get `401 {"error":"unauthenticated"}` instead of
+a login redirect. The plain-language walkthrough of all of this is in
+[docs/TECH-GUIDE.md](docs/TECH-GUIDE.md).
 
 ## Environments: dev vs qa
 
