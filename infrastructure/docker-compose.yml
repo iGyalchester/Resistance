@@ -54,6 +54,9 @@ services:
         MODULE: services/mvc-service
     environment:
       DB_HOST: mysql
+      # optional AuditFlow integration (blank = off); see docs/E2E-TEST-PLAN.md
+      TRACKER_AUDIT_URL: ${TRACKER_AUDIT_URL:-}
+      TRACKER_AUDIT_TOKEN: ${TRACKER_AUDIT_TOKEN:-}
     ports:
       - "8085:8085"
     depends_on:
@@ -82,6 +85,9 @@ services:
         MODULE: services/intake-service
     environment:
       DB_HOST: mysql
+      # optional AuditFlow integration (blank = off); see docs/E2E-TEST-PLAN.md
+      TRACKER_AUDIT_URL: ${TRACKER_AUDIT_URL:-}
+      TRACKER_AUDIT_TOKEN: ${TRACKER_AUDIT_TOKEN:-}
     ports:
       - "8087:8087"
     depends_on:

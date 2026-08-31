@@ -49,7 +49,8 @@ class AuthApiControllerTests {
                 new SessionAuthenticator(new HttpSessionSecurityContextRepository());
 
         AuthApiController controller = new AuthApiController(otpService, authenticator,
-                emailThrottle, ipThrottle, accounts, "track@resistance.example");
+                emailThrottle, ipThrottle, accounts, "track@resistance.example",
+                com.resistance.shared.utils.audit.AuditEventClient.disabled());
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
 
         boris = new UserAccount("Boris Gerard", "boris@gmail.com");

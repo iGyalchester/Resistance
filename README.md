@@ -43,7 +43,7 @@ Resistance/
 │   ├── shared-models/             JPA entities and DTOs
 │   ├── shared-validation/         Custom Bean Validation constraints (@ReferralCode)
 │   ├── shared-exceptions/         Common exceptions and API error payloads
-│   └── shared-utils/              CSV parsing and normalization helpers
+│   └── shared-utils/              CSV/name helpers, field encryption, audit event client
 │
 ├── etl/
 │   ├── etl-core/                  Extract/Transform/Load framework interfaces + pipeline
@@ -243,6 +243,20 @@ course demo* of the REST API - its secured twin is `security-service` -
 so never expose 8083 publicly; TLS terminates at the ALB/gateway, not
 in-app; dev DB credentials sit in property files (qa takes everything
 from the environment).
+
+## Audit trail (AuditFlow integration)
+
+Set `TRACKER_AUDIT_URL` (and `TRACKER_AUDIT_TOKEN`) and mvc-service +
+intake-service emit audit events - OTP requests, login successes and
+failures, application creates/updates/deletes, profile (PII) access,
+intake provisioning - to an
+[AuditFlow](https://github.com/iGyalchester/auditflow-platform) ingestion
+endpoint, where they become SOC 2/GDPR evidence and can trigger alert
+rules (e.g. repeated login failures). Emission is asynchronous and
+fire-and-forget: auditing being down never breaks the tracker
+(at-most-once delivery, by design). Blank URL = disabled, the dev
+default. The full two-system test walkthrough is in
+[docs/E2E-TEST-PLAN.md](docs/E2E-TEST-PLAN.md).
 
 ## Production database (decision pending)
 

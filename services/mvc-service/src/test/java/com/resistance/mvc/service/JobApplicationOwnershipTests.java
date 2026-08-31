@@ -7,6 +7,7 @@ import com.resistance.shared.models.entity.ApplicationStatus;
 import com.resistance.shared.models.entity.JobApplication;
 import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
+import com.resistance.shared.utils.audit.AuditEventClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +32,7 @@ class JobApplicationOwnershipTests {
     private UserAccountRepository accounts;
     private StatusHistoryRepository history;
     private JobApplicationServiceImpl service;
+    private AuditEventClient audit;
 
     private UserAccount me;
     private UserAccount someoneElse;
@@ -41,8 +43,9 @@ class JobApplicationOwnershipTests {
         applications = mock(JobApplicationRepository.class);
         accounts = mock(UserAccountRepository.class);
         history = mock(StatusHistoryRepository.class);
+        audit = mock(AuditEventClient.class);
         service = new JobApplicationServiceImpl(applications, accounts, history,
-                Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), audit);
         when(applications.save(any(JobApplication.class))).thenAnswer(inv -> inv.getArgument(0));
 
         me = new UserAccount("Me", "me@example.com");
@@ -123,5 +126,32 @@ class JobApplicationOwnershipTests {
         service.saveForOwner(mine, 1);
 
         verify(history, never()).save(any());
+    }
+
+    @Test
+    void saveAndDeleteEmitAuditEvents() {
+        JobApplication mine = new JobApplication("Globex", "Java Dev", ApplicationStatus.APPLIED);
+        service.saveForOwner(mine, 1);
+        org.mockito.Mockito.verify(audit).emit(
+                org.mockito.ArgumentMatchers.eq("DATABASE_QUERY"),
+                org.mockito.ArgumentMatchers.eq("CREATE"),
+                org.mockito.ArgumentMatchers.eq("me@example.com"),
+                org.mockito.ArgumentMatchers.startsWith("job_application:"),
+                org.mockito.ArgumentMatchers.isNull());
+
+        theirs.setOwner(me);
+        service.deleteByIdForOwner(42, 1);
+        org.mockito.Mockito.verify(audit).emit(
+                org.mockito.ArgumentMatchers.eq("DATABASE_QUERY"),
+                org.mockito.ArgumentMatchers.eq("DELETE"),
+                org.mockito.ArgumentMatchers.eq("me@example.com"),
+                org.mockito.ArgumentMatchers.eq("job_application:42"),
+                org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
+    void refusedOperationsEmitNothing() {
+        service.deleteByIdForOwner(42, 1); // theirs, not mine
+        org.mockito.Mockito.verifyNoInteractions(audit);
     }
 }

@@ -12,6 +12,7 @@ import com.resistance.shared.models.entity.Contact;
 import com.resistance.shared.models.entity.JobApplication;
 import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
+import com.resistance.shared.utils.audit.AuditEventClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +36,7 @@ class IntakeServiceTests {
     private ContactRepository contacts;
     private StatusHistoryRepository history;
     private StatusNotifier notifier;
+    private AuditEventClient audit;
     private ConfirmationEmailParser parser;
     private IntakeService intakeService;
     private UserAccount account;
@@ -49,9 +51,10 @@ class IntakeServiceTests {
         contacts = mock(ContactRepository.class);
         history = mock(StatusHistoryRepository.class);
         notifier = mock(StatusNotifier.class);
+        audit = mock(AuditEventClient.class);
         parser = mock(ConfirmationEmailParser.class);
         intakeService = new IntakeService(accounts, applications, contacts, history, parser,
-                notifier, Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), false);
+                notifier, Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), false, audit);
 
         account = new UserAccount("Boris Gerard", "boris@gmail.com");
         account.setId(7);
@@ -201,7 +204,7 @@ class IntakeServiceTests {
     @Test
     void strictModeIgnoresBareAddressEmail() {
         IntakeService strict = new IntakeService(accounts, applications, contacts, history, parser,
-                notifier, Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), true);
+                notifier, Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), true, audit);
 
         IntakeResult result = strict.process(EMAIL);
 
@@ -232,5 +235,25 @@ class IntakeServiceTests {
 
         assertTrue(result.accountCreated());
         assertEquals("CREATED", result.outcome());
+    }
+
+    @Test
+    void intakeEmitsAuditEventsForProvisioningAndCreation() {
+        when(accounts.findByEmailIgnoreCase(anyString())).thenReturn(Optional.empty());
+        when(applications.findByOwnerIdAndCompanyNameIgnoreCase(anyInt(), anyString())).thenReturn(List.of());
+        when(parser.parse(any())).thenReturn(Optional.of(new ParsedApplication("Acme Corp", null)));
+
+        intakeService.process(EMAIL);
+
+        org.mockito.Mockito.verify(audit).emit(
+                org.mockito.ArgumentMatchers.eq("AUTH_EVENT"),
+                org.mockito.ArgumentMatchers.eq("ACCOUNT_PROVISIONED"),
+                org.mockito.ArgumentMatchers.eq("boris@gmail.com"),
+                anyString(), org.mockito.ArgumentMatchers.isNull());
+        org.mockito.Mockito.verify(audit).emit(
+                org.mockito.ArgumentMatchers.eq("DATABASE_QUERY"),
+                org.mockito.ArgumentMatchers.eq("INTAKE_CREATE"),
+                org.mockito.ArgumentMatchers.eq("boris@gmail.com"),
+                anyString(), org.mockito.ArgumentMatchers.isNull());
     }
 }
