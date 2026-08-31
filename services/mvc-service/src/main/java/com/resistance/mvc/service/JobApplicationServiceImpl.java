@@ -1,13 +1,17 @@
 package com.resistance.mvc.service;
 
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
 import com.resistance.mvc.dao.JobApplicationRepository;
+import com.resistance.mvc.dao.StatusHistoryRepository;
 import com.resistance.mvc.dao.UserAccountRepository;
+import com.resistance.shared.models.entity.ApplicationStatus;
 import com.resistance.shared.models.entity.JobApplication;
+import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
 
 @Service
@@ -15,11 +19,17 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 
 	private final JobApplicationRepository applicationRepository;
 	private final UserAccountRepository accountRepository;
+	private final StatusHistoryRepository historyRepository;
+	private final Clock clock;
 
 	public JobApplicationServiceImpl(JobApplicationRepository theJobApplicationRepository,
-									 UserAccountRepository theUserAccountRepository) {
+									 UserAccountRepository theUserAccountRepository,
+									 StatusHistoryRepository theStatusHistoryRepository,
+									 Clock theClock) {
 		applicationRepository = theJobApplicationRepository;
 		accountRepository = theUserAccountRepository;
+		historyRepository = theStatusHistoryRepository;
+		clock = theClock;
 	}
 
 	@Override
@@ -37,18 +47,30 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 	@Override
 	public void saveForOwner(JobApplication theJobApplication, int ownerId) {
 
-		if (theJobApplication.getId() != 0
-				&& findByIdForOwner(theJobApplication.getId(), ownerId).isEmpty()) {
-			// updating an id that isn't yours: refuse rather than overwrite
-			throw new IllegalArgumentException(
-					"Application " + theJobApplication.getId() + " does not belong to account " + ownerId);
+		ApplicationStatus previousStatus = null;
+		boolean isNew = theJobApplication.getId() == 0;
+
+		if (!isNew) {
+			JobApplication existing = findByIdForOwner(theJobApplication.getId(), ownerId)
+					// updating an id that isn't yours: refuse rather than overwrite
+					.orElseThrow(() -> new IllegalArgumentException(
+							"Application " + theJobApplication.getId()
+									+ " does not belong to account " + ownerId));
+			previousStatus = existing.getStatus();
+			// the form doesn't carry these; keep what the row already has
+			theJobApplication.setAppliedAt(existing.getAppliedAt());
 		}
 
 		UserAccount owner = accountRepository.findById(ownerId)
 				.orElseThrow(() -> new IllegalStateException("No account " + ownerId));
 		theJobApplication.setOwner(owner);
 
-		applicationRepository.save(theJobApplication);
+		JobApplication saved = applicationRepository.save(theJobApplication);
+
+		if (isNew || previousStatus != saved.getStatus()) {
+			historyRepository.save(new StatusHistory(saved, previousStatus,
+					saved.getStatus(), clock.instant(), StatusHistory.SOURCE_MANUAL));
+		}
 	}
 
 	@Override

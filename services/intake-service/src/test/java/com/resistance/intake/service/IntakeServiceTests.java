@@ -2,16 +2,21 @@ package com.resistance.intake.service;
 
 import com.resistance.intake.dao.ContactRepository;
 import com.resistance.intake.dao.JobApplicationRepository;
+import com.resistance.intake.dao.StatusHistoryRepository;
 import com.resistance.intake.dao.UserAccountRepository;
 import com.resistance.intake.parser.ConfirmationEmailParser;
 import com.resistance.intake.parser.ParsedApplication;
 import com.resistance.shared.models.entity.ApplicationStatus;
 import com.resistance.shared.models.entity.Contact;
 import com.resistance.shared.models.entity.JobApplication;
+import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,6 +32,7 @@ class IntakeServiceTests {
     private UserAccountRepository accounts;
     private JobApplicationRepository applications;
     private ContactRepository contacts;
+    private StatusHistoryRepository history;
     private ConfirmationEmailParser parser;
     private IntakeService intakeService;
     private UserAccount account;
@@ -39,8 +45,10 @@ class IntakeServiceTests {
         accounts = mock(UserAccountRepository.class);
         applications = mock(JobApplicationRepository.class);
         contacts = mock(ContactRepository.class);
+        history = mock(StatusHistoryRepository.class);
         parser = mock(ConfirmationEmailParser.class);
-        intakeService = new IntakeService(accounts, applications, contacts, parser, false);
+        intakeService = new IntakeService(accounts, applications, contacts, history, parser,
+                Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), false);
 
         account = new UserAccount("Boris Gerard", "boris@gmail.com");
         account.setId(7);
@@ -64,6 +72,22 @@ class IntakeServiceTests {
     }
 
     @Test
+    void creationRecordsHistoryFromNull() {
+        when(parser.parse(EMAIL)).thenReturn(Optional.of(
+                new ParsedApplication("Acme Corp", "Backend Engineer")));
+        when(applications.findByOwnerIdAndCompanyNameIgnoreCase(7, "Acme Corp")).thenReturn(List.of());
+
+        intakeService.process(EMAIL);
+
+        org.mockito.ArgumentCaptor<StatusHistory> recorded =
+                org.mockito.ArgumentCaptor.forClass(StatusHistory.class);
+        org.mockito.Mockito.verify(history).save(recorded.capture());
+        assertNull(recorded.getValue().getFromStatus());
+        assertEquals(ApplicationStatus.APPLIED, recorded.getValue().getToStatus());
+        assertEquals(StatusHistory.SOURCE_INTAKE, recorded.getValue().getSource());
+    }
+
+    @Test
     void rejectionEmailMovesExistingApplicationToRejected() {
         JobApplication existing = new JobApplication("Acme Corp", "Backend Engineer", ApplicationStatus.APPLIED);
         existing.setId(42);
@@ -76,6 +100,12 @@ class IntakeServiceTests {
 
         assertEquals("UPDATED", result.outcome());
         assertEquals(ApplicationStatus.REJECTED, existing.getStatus());
+
+        org.mockito.ArgumentCaptor<StatusHistory> recorded =
+                org.mockito.ArgumentCaptor.forClass(StatusHistory.class);
+        org.mockito.Mockito.verify(history).save(recorded.capture());
+        assertEquals(ApplicationStatus.APPLIED, recorded.getValue().getFromStatus());
+        assertEquals(ApplicationStatus.REJECTED, recorded.getValue().getToStatus());
     }
 
     @Test
@@ -147,7 +177,8 @@ class IntakeServiceTests {
 
     @Test
     void strictModeIgnoresBareAddressEmail() {
-        IntakeService strict = new IntakeService(accounts, applications, contacts, parser, true);
+        IntakeService strict = new IntakeService(accounts, applications, contacts, history, parser,
+                Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC), true);
 
         IntakeResult result = strict.process(EMAIL);
 

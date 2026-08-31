@@ -2,12 +2,14 @@ package com.resistance.intake.service;
 
 import com.resistance.intake.dao.ContactRepository;
 import com.resistance.intake.dao.JobApplicationRepository;
+import com.resistance.intake.dao.StatusHistoryRepository;
 import com.resistance.intake.dao.UserAccountRepository;
 import com.resistance.intake.parser.ConfirmationEmailParser;
 import com.resistance.intake.parser.ParsedApplication;
 import com.resistance.shared.models.entity.ApplicationStatus;
 import com.resistance.shared.models.entity.Contact;
 import com.resistance.shared.models.entity.JobApplication;
+import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -38,19 +41,25 @@ public class IntakeService {
     private final UserAccountRepository accountRepository;
     private final JobApplicationRepository applicationRepository;
     private final ContactRepository contactRepository;
+    private final StatusHistoryRepository historyRepository;
     private final ConfirmationEmailParser parser;
+    private final Clock clock;
     private final boolean requireAlias;
     private final SecureRandom random = new SecureRandom();
 
     public IntakeService(UserAccountRepository accountRepository,
                          JobApplicationRepository applicationRepository,
                          ContactRepository contactRepository,
+                         StatusHistoryRepository historyRepository,
                          ConfirmationEmailParser parser,
+                         Clock clock,
                          @Value("${intake.require-alias:false}") boolean requireAlias) {
         this.accountRepository = accountRepository;
         this.applicationRepository = applicationRepository;
         this.contactRepository = contactRepository;
+        this.historyRepository = historyRepository;
         this.parser = parser;
+        this.clock = clock;
         this.requireAlias = requireAlias;
     }
 
@@ -118,6 +127,8 @@ public class IntakeService {
             if (parsed.status() != application.getStatus()) {
                 log.info("Application #{} status {} -> {}", application.getId(),
                         application.getStatus(), parsed.status());
+                historyRepository.save(new StatusHistory(application, application.getStatus(),
+                        parsed.status(), clock.instant(), StatusHistory.SOURCE_INTAKE));
                 application.setStatus(parsed.status());
                 changed = true;
             }
@@ -136,6 +147,8 @@ public class IntakeService {
             application.setOwner(account);
             linkContact(application, parsed);
             application = applicationRepository.save(application);
+            historyRepository.save(new StatusHistory(application, null,
+                    application.getStatus(), clock.instant(), StatusHistory.SOURCE_INTAKE));
             outcome = "CREATED";
             log.info("Tracked new application #{} ({} - {}, {}) for {}", application.getId(),
                     parsed.companyName(), parsed.positionTitle(), application.getStatus(), senderAddress);
