@@ -3,58 +3,62 @@ package com.resistance.mvc.service;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.resistance.mvc.dao.JobApplicationRepository;
+import com.resistance.mvc.dao.UserAccountRepository;
 import com.resistance.shared.models.entity.JobApplication;
+import com.resistance.shared.models.entity.UserAccount;
 
 @Service
 public class JobApplicationServiceImpl implements JobApplicationService {
 
-	private JobApplicationRepository applicationRepository;
-	
-	@Autowired
-	public JobApplicationServiceImpl(JobApplicationRepository theJobApplicationRepository) {
+	private final JobApplicationRepository applicationRepository;
+	private final UserAccountRepository accountRepository;
+
+	public JobApplicationServiceImpl(JobApplicationRepository theJobApplicationRepository,
+									 UserAccountRepository theUserAccountRepository) {
 		applicationRepository = theJobApplicationRepository;
-	}
-	
-	@Override
-	public List<JobApplication> findAll() {
-		return applicationRepository.findAllByOrderByCompanyNameAsc();
+		accountRepository = theUserAccountRepository;
 	}
 
 	@Override
-	public JobApplication findById(int theId) {
-		Optional<JobApplication> result = applicationRepository.findById(theId);
-		
-		JobApplication theJobApplication = null;
-		
-		if (result.isPresent()) {
-			theJobApplication = result.get();
-		}
-		else {
-			// we didn't find the application
-			throw new RuntimeException("Did not find application id - " + theId);
-		}
-		
-		return theJobApplication;
+	public List<JobApplication> findAllForOwner(int ownerId) {
+		return applicationRepository.findByOwnerIdOrderByCompanyNameAsc(ownerId);
 	}
 
 	@Override
-	public void save(JobApplication theJobApplication) {
+	public Optional<JobApplication> findByIdForOwner(int theId, int ownerId) {
+		// somebody else's application looks exactly like a missing one
+		return applicationRepository.findById(theId)
+				.filter(app -> app.getOwner() != null && app.getOwner().getId() == ownerId);
+	}
+
+	@Override
+	public void saveForOwner(JobApplication theJobApplication, int ownerId) {
+
+		if (theJobApplication.getId() != 0
+				&& findByIdForOwner(theJobApplication.getId(), ownerId).isEmpty()) {
+			// updating an id that isn't yours: refuse rather than overwrite
+			throw new IllegalArgumentException(
+					"Application " + theJobApplication.getId() + " does not belong to account " + ownerId);
+		}
+
+		UserAccount owner = accountRepository.findById(ownerId)
+				.orElseThrow(() -> new IllegalStateException("No account " + ownerId));
+		theJobApplication.setOwner(owner);
+
 		applicationRepository.save(theJobApplication);
 	}
 
 	@Override
-	public void deleteById(int theId) {
+	public boolean deleteByIdForOwner(int theId, int ownerId) {
+		Optional<JobApplication> owned = findByIdForOwner(theId, ownerId);
+		if (owned.isEmpty()) {
+			return false;
+		}
 		applicationRepository.deleteById(theId);
+		return true;
 	}
 
 }
-
-
-
-
-
-

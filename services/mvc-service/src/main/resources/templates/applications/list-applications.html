@@ -16,10 +16,14 @@
 
 <div class="container">
 
-	<nav class="my-3">
-		<strong>Applications</strong> |
-		<a th:href="@{/contacts/list}">Contacts</a> |
-		<a th:href="@{/dashboard}">My Dashboard</a>
+	<nav class="my-3 d-flex justify-content-between">
+		<span>
+			<strong>Applications</strong> |
+			<a th:href="@{/contacts/list}">Contacts</a> |
+			<a th:href="@{/dashboard}">My Dashboard</a> |
+			<a th:href="@{/profile}">Profile</a>
+		</span>
+		<a th:href="@{/logout}">Log out</a>
 	</nav>
 
 	<h3>Job Application Tracker</h3>
@@ -57,12 +61,12 @@
 						Update
 					</a>
 
-					<!-- Add "delete" button/link -->
-					<a th:href="@{/applications/delete(applicationId=${tempApplication.id})}"
-					   class="btn btn-danger btn-sm"
-					   onclick="if (!(confirm('Are you sure you want to delete this application?'))) return false">
-						Delete
-					</a>
+					<!-- Delete is a POST so it carries a CSRF token -->
+					<form th:action="@{/applications/delete}" method="POST" class="d-inline"
+						  onsubmit="return confirm('Are you sure you want to delete this application?')">
+						<input type="hidden" name="applicationId" th:value="${tempApplication.id}" />
+						<button type="submit" class="btn btn-danger btn-sm">Delete</button>
+					</form>
 				</td>
 
 			</tr>

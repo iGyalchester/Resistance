@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 
 /**
  * The logged-in user's view: only their own applications. Access is
- * enforced by DashboardInterceptor.
+ * enforced by Spring Security (see SecurityConfig).
  */
 @Controller
 public class DashboardController {
