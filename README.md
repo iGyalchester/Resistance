@@ -9,6 +9,10 @@ passwordless login at its core.
 > a plain-language tour of every technology in the stack (Maven modules,
 > Spring, JPA, SES/SNS/KMS, the OTP login, the Claude parser, CI), each with
 > what it is, why it's here, and where to see it in the code.
+>
+> **Want to learn it by reading the code?** [docs/CODE-TOUR.md](docs/CODE-TOUR.md)
+> is a file-by-file reading order — login, tenancy, email intake, audit
+> events out, the React app — with the test that proves each stop.
 
 ## How it fits together
 
