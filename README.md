@@ -10,6 +10,17 @@ passwordless login at its core.
 > Spring, JPA, SES/SNS/KMS, the OTP login, the Claude parser, CI), each with
 > what it is, why it's here, and where to see it in the code.
 
+## How it fits together
+
+![Resistance services push audit events to AuditFlow ingestion, and AuditFlow's collector agent pulls the MySQL query log; ingestion feeds Kafka, enrichment, and S3/Aurora evidence stores](docs/img/resistance-auditflow-flow.svg)
+
+Teal is this repo; ochre is [AuditFlow](https://github.com/iGyalchester/auditflow-platform),
+its compliance-evidence sibling. Two routes cross the boundary: the services
+**push** security events as they happen (fire-and-forget, so auditing can never
+break the tracker), and AuditFlow's collector agent **pulls** the database's own
+query log (checkpointed, at-least-once). Details under
+[Audit trail](#audit-trail-auditflow-integration).
+
 ## Domain model
 
 - **JobApplication** - the central tracked record: company, position, and an
