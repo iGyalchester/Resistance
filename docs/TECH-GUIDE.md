@@ -26,6 +26,10 @@ MySQL ─────────── one job_application row, owned by your a
    │
 mvc-service ───── the website: log in with a one-time code,
                   see YOUR applications on /dashboard
+   │
+   └──▶ AuditFlow (optional) ── both services also emit security audit
+        events (logins, data changes, PII access) to a sister project;
+        see "Audit events out to AuditFlow" below
 ```
 
 Everything else in the repo supports that flow (shared code, deployment
