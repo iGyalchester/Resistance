@@ -22,10 +22,10 @@ Resistance MySQL ── general_log ── collector-agent ──┘        PULL
 ```
 
 **Scope:** correctness of event flow, security controls (auth, redaction,
-tenancy), and resilience (either system down). **Out of scope for now:**
-the AuditFlow read API (gateway controllers are placeholders), report
-generation against live evidence (unit-tested only), and the React UI
-(covered by its own Vitest suite).
+tenancy, rate limits), the read side (gateway API: audit logs, alerts,
+rule management, reports over stored evidence), and resilience (either
+system down). **Out of scope for now:** the S3/Athena lake path for very
+large report windows, and the React UI (covered by its own Vitest suite).
 
 ---
 
@@ -39,9 +39,42 @@ generation against live evidence (unit-tested only), and the React UI
 | AuditFlow unit | `QueryRedactorTest`, `MySqlGeneralLogCollectorTest` | PII literals stripped, noise filtered, deterministic ids |
 | AuditFlow IT (CI) | `EventIngestionIntegrationTest` | HTTP → Kafka against a real broker |
 | AuditFlow IT (CI) | `MySqlGeneralLogCollectorIntegrationTest` | a PII-bearing query round-trips **redacted** from a real MySQL general log; checkpoint holds until committed |
-| AuditFlow IT (CI) | `AuroraWriterAdapterIntegrationTest` | idempotent insert against real Postgres |
+| AuditFlow IT (CI) | `AuroraWriterAdapterIntegrationTest` | idempotent insert against real Postgres, controls persisted |
+| AuditFlow unit | `CognitoJwtAuthTest` | gateway accepts a valid Cognito ID token for the app client and rejects expired / wrong-issuer / wrong-audience / access / unsigned / no-tenant tokens |
+| AuditFlow IT (CI) | `RepositoriesIntegrationTest` | audit logs, alerts and rules are scoped per customer against real Postgres; a cross-tenant upsert cannot hijack a row |
+| AuditFlow IT (CI) | `AlertingEndToEndTest` | seed rules → Postgres → Kafka → real Slack webhook call → `alert_history` row |
+| AuditFlow unit | `AlertRuleControllerTest`, `ConditionEvaluatorTest` | a rule with `T(java.lang.Runtime)` or a non-boolean condition is a 400 at write time |
+| AuditFlow unit | `RateLimitFilterTest` ×2, `TokenBucketLimiterTest` | burst then 429 + Retry-After per client on the gateway and on ingestion |
 
 The manual scenarios below cover only what crosses the repo boundary.
+
+---
+
+## Demo in five commands
+
+The shortest path from "a person mistypes a login code in Resistance" to
+"a compliance platform shows the alert". Two terminals, both repos.
+
+```bash
+# auditflow-platform: the whole platform in containers (jars first)
+mvn -DskipTests clean package && AUDIT_INGESTION_TOKEN=e2e-secret docker compose --profile app up --build -d
+
+# Resistance: MySQL + the tracker, pointed at the platform
+docker compose -f infrastructure/docker-compose.yml up -d mysql
+TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service -am spring-boot:run
+```
+
+Now fail a login at `http://localhost:8085/login` (wrong code), then:
+
+```bash
+curl -s -H 'X-Customer-Id: resistance' 'localhost:8080/api/v1/audit-logs?type=AUTH_EVENT&limit=3'   # the LOGIN_FAILURE, with SOC 2 controls
+curl -s -H 'X-Customer-Id: resistance' localhost:8080/api/v1/alerts                                   # "Failed login attempt" fired
+curl -s -H 'X-Customer-Id: resistance' localhost:8080/api/v1/reports/soc2                             # it is on the evidence report
+```
+
+`X-Customer-Id` stands in for the verified Cognito claim while the
+gateway runs with auth open; in the cloud the same calls carry a bearer
+token and the header is ignored.
 
 ---
 
@@ -53,10 +86,8 @@ would collide with AuditFlow's 8080/8081):
 | Component | Port | How to start |
 |---|---|---|
 | Resistance MySQL | 3306 | `docker compose -f infrastructure/docker-compose.yml up -d mysql` (Resistance repo) |
-| AuditFlow Kafka / Postgres / LocalStack | 9092 / 5432 / 4566 | `docker compose up -d` (auditflow-platform repo) + create the `auditflow-events` bucket (README step 2) |
-| AuditFlow ingestion-service | 8081 | `AUDIT_INGESTION_TOKEN=e2e-secret mvn -pl services/ingestion-service spring-boot:run` |
-| AuditFlow enrichment-service | 8082 | `mvn -pl services/enrichment-service spring-boot:run` |
-| AuditFlow alerting-service | 8083 | only for E2E-5 |
+| AuditFlow (all of it) | 9092 / 5432 / 4566 + 8080–8084 | `mvn -DskipTests clean package && AUDIT_INGESTION_TOKEN=e2e-secret docker compose --profile app up --build -d` (auditflow-platform repo; the evidence bucket is created by an init hook). Or `docker compose up -d` for infrastructure only and `mvn -pl services/<name> spring-boot:run` per service with the same env var. |
+| AuditFlow api-gateway | 8080 | part of the profile above; auth open, `X-Customer-Id: resistance` on every call |
 | Resistance mvc-service | 8085 | `TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service -am spring-boot:run` |
 | Resistance intake-service | 8087 | same two env vars, `-pl services/intake-service` |
 | collector-agent | – | E2E-6 only: `AGENT_INGESTION_TOKEN=e2e-secret mvn -pl agent/collector-agent spring-boot:run` (auditflow-platform repo) |
@@ -64,6 +95,9 @@ would collide with AuditFlow's 8080/8081):
 Verification helpers (used by several scenarios):
 
 ```bash
+# The read API (what a customer would see)
+API="curl -s -H 'X-Customer-Id: resistance' http://localhost:8080/api/v1"
+
 # Aurora-side evidence (queryable metadata)
 PSQL="docker exec -it auditflow-postgres psql -U auditflow -d auditflow"
 
@@ -93,8 +127,11 @@ SELECT event_type, action, user_id, anomalous FROM audit_events
 ```
 rows for `AUTH_EVENT/OTP_REQUESTED`, `AUTH_EVENT/LOGIN_FAILURE`,
 `AUTH_EVENT/LOGIN_SUCCESS` with the login email as `user_id`; matching
-JSON objects under `$S3LS`. **Fail if** any event is missing, lands under a
-different `customer_id`, or Aurora and S3 disagree on count.
+JSON objects under `$S3LS`; and the same three through the read API
+(`$API/audit-logs?type=AUTH_EVENT&limit=3`, each with `controls`
+`SOC2:AC-2,SOC2:IA-2`). **Fail if** any event is missing, lands under a
+different `customer_id`, Aurora and S3 disagree on count, or
+`X-Customer-Id: someone-else` returns any of them.
 
 ### E2E-2 — Data + intake events, tenancy intact
 
@@ -129,17 +166,40 @@ write lands — that would mean forgeable audit evidence.
    outage window are **absent — that is the documented at-most-once
    tradeoff of the push path**, not a failure (contrast with E2E-6 step 3).
 
-### E2E-5 — Alert rule fires on real traffic
+### E2E-5 — Alert rule fires on real traffic, managed through the API
 
-1. Seed a rule (`$PSQL`):
-```sql
-INSERT INTO alert_rules (rule_id, customer_id, name, event_type, condition_expression, enabled)
-VALUES ('r-e2e-1', 'resistance', 'Login failures', 'AUTH_EVENT', 'query == null', true);
+1. The seeded rule is already there (`$API/alert-rules` lists
+   `resistance-login-failures`). Add one of your own:
+```bash
+curl -s -X POST localhost:8080/api/v1/alert-rules -H 'X-Customer-Id: resistance' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"E2E login failures","eventType":"AUTH_EVENT","conditionExpression":"action == '"'"'LOGIN_FAILURE'"'"'","notificationChannels":["slack"]}'
 ```
-2. Fail a login 3×. **Expect:** alerting-service logs `[slack] rule=r-e2e-1 ...`
-   per matching event. Then set `condition_expression` to
-   `T(java.lang.Runtime).getRuntime() != null` → **expect zero matches and a
-   WARN** (sandbox holds against a live injection payload).
+   **Expect** 201 with a server-generated `ruleId` and `customerId`
+   `resistance` regardless of what the body said.
+2. Fail a login 3×. **Expect** within ~40 s (alerting reloads rules every
+   30 s): `$API/alerts` lists one row per matching event **per rule** with
+   `ruleName` and `notifiedChannels` (`slack` if
+   `ALERT_SLACK_WEBHOOK_URL` is set, otherwise empty and alerting-service
+   logs `[slack:not configured]`). `psql`: `SELECT count(*) FROM
+   alert_history` agrees.
+3. Injection probe, at the door:
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8080/api/v1/alert-rules -H 'X-Customer-Id: resistance' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"evil","conditionExpression":"T(java.lang.Runtime).getRuntime() != null"}'
+```
+   **Expect** `400` — refused at write time by the same sandbox alerting
+   runs. Then bypass the API and insert that condition straight into
+   `alert_rules` with `$PSQL`; fail a login. **Expect** zero matches and a
+   WARN in alerting-service (defense in depth: the sandbox holds even
+   against a rule that never went through the gateway).
+4. Tenancy: `curl -H 'X-Customer-Id: other-co' localhost:8080/api/v1/alerts`
+   → `[]`; `DELETE` of your rule's id with `other-co` → `404`; with
+   `resistance` → `204` and alerting stops matching it within 30 s.
+5. Rate limit: hit `$API/alerts` 60× in a tight loop. **Expect** some
+   `429` with `Retry-After: 1` and `X-RateLimit-Remaining: 0`, then
+   normal service a second later.
 
 ### E2E-6 — Pull path: agent, redaction, at-least-once
 
@@ -168,6 +228,10 @@ rejects unauthenticated calls with 401 from the **Cognito authorizer**
 ---
 
 ## 3. Exit criteria
+
+- The read API answers every question the scenarios ask (audit logs,
+  alerts, rules, a SOC 2 report) scoped to `resistance`, and answers
+  nothing for another `X-Customer-Id`.
 
 **Pass:** every scenario's expectations hold; zero PII in stored evidence
 (E2E-6.3 grep is the hard gate); no user-facing Resistance failure in E2E-4;
