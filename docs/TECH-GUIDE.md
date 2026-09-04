@@ -415,8 +415,34 @@ Used only in qa/production; dev needs none of this.
 | **SES** (Simple Email Service) | AWS's email send/receive service | *Receives* mail for `track@yourdomain.com` (via an MX DNS record) and can also *send* our OTP emails over SMTP |
 | **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES publishes each received email to a topic; the topic POSTs it to `/intake/aws-sns` |
 | **S3** | file storage | keeps the raw email (30-day expiry) |
-| **KMS** (Key Management Service) | managed encryption keys | generates the data key used for field encryption (below) |
-| **CloudFormation** | infrastructure-as-code: a YAML file describing AWS resources, deployed as one "stack" | [`infrastructure/aws/ses-intake.yaml`](../infrastructure/aws/ses-intake.yaml) creates the whole SES→SNS chain in one command |
+| **KMS** (Key Management Service) | managed encryption keys | protects the data key used for field encryption (below) |
+| **Route53** | AWS's DNS service; a "hosted zone" is one domain's set of records | holds the MX record that sends `track@…` mail to SES, the SES verification/DKIM records, and later the app's hostname |
+| **ECR** (Elastic Container Registry) | a private Docker image store | the Deploy workflow pushes one image per service here; ECS pulls from it |
+| **Terraform** | infrastructure-as-code: `.tf` files describe the resources you want, `terraform apply` makes AWS match them | [`infrastructure/terraform/`](../infrastructure/terraform/) creates every AWS resource above, for a `dev` and a `prod` environment |
+
+### Terraform, state, and why CI has no AWS keys
+
+Terraform reads every `.tf` file in a directory, works out what AWS
+resources they describe, compares that with what exists, and applies the
+difference. The comparison needs a memory of what it created last time:
+the **state** file. It lives in an S3 bucket so a laptop and a CI runner
+see the same memory, and a lockfile stops two applies from racing. A
+**module** is a folder of `.tf` files you call like a function
+(`module "ecr" { source = "../../modules/ecr" ... }`); `environments/dev`
+and `environments/prod` call the same modules with different inputs.
+
+The chicken-and-egg problem: the state bucket cannot be created by a
+configuration whose state lives in that bucket. So `bootstrap/` is a small
+configuration you apply once by hand; it creates the bucket, the CI role,
+and the two account-level things AWS allows only one of (the hosted zone
+and the active SES receipt rule set).
+
+CI never holds an AWS key. GitHub issues each workflow run a short-lived
+signed token (**OIDC**, the same idea as "log in with Google"), and the
+bootstrap role is configured to trust tokens that name *this* repository
+on `main`, a pull request, or a named environment. AWS swaps that token for
+temporary credentials that expire with the job. There is nothing to leak
+and nothing to rotate.
 
 ### Why SNS messages are signature-verified
 
@@ -439,10 +465,11 @@ tampering. Each value gets a random IV (so equal inputs produce different
 ciphertexts) and is stored as `enc:v1:<base64>`; anything without that
 prefix is treated as old plaintext and passed through, so turning
 encryption on doesn't break existing rows.
-**Where does the key come from?** Never from the app. You run
-`aws kms generate-data-key` once, store the result in Secrets Manager, and
-inject it as `TRACKER_ENC_KEY`. Dev runs without a key (plaintext, with a
-logged warning). The full ceremony is in
+**Where does the key come from?** Never from the app. Terraform generates
+32 random bytes once, stores them as an SSM SecureString encrypted under a
+KMS customer-managed key, and the ECS task definition injects the value as
+`TRACKER_ENC_KEY`. Dev runs without a key (plaintext, with a logged
+warning). Details in
 [`infrastructure/aws/README.md`](../infrastructure/aws/README.md).
 
 ---
@@ -457,6 +484,7 @@ logged warning). The full ceremony is in
 | **API gateway** | one front door on port 8080 that forwards `/rest-api/**`, `/intake/**` etc. to the right service — a hand-rolled ~80-line proxy, deliberately not a framework | `api-gateway/` |
 | **GitHub Actions CI** | on every push, GitHub spins up a runner, starts MySQL with our real init scripts, runs `mvn verify` (compile + all tests, including full Spring context startup), and uploads the built jars; a second job type-checks, tests, and builds the React app with Node | `.github/workflows/build.yml` |
 | **CodeQL** | GitHub's static security analysis - scans the Java code for vulnerability patterns on every PR and weekly | `.github/workflows/codeql.yml` |
+| **Terraform workflow** | on a pull request: format, validate, a security scan and a plan for both environments; on a push to `main`: applies `dev`; `prod` applies only from a manual run | `.github/workflows/terraform.yml` |
 | **Dependabot** | opens PRs when Maven dependencies or Actions versions have updates (which often carry security fixes) | `.github/dependabot.yml` |
 
 The CI detail worth appreciating: because it boots a *real* MySQL with the
@@ -484,7 +512,8 @@ history and were caught exactly there.
 | How a page gets its data | `controller/JobApplicationController.java` + matching template |
 | What a table looks like | the `@Entity` class **and** its `CREATE TABLE` in `db-init/02-job-tracker.sql` |
 | Why qa won't start | `application-qa.properties` (placeholders with no defaults) |
-| What AWS resources exist | `infrastructure/aws/ses-intake.yaml` + its README |
+| What AWS resources exist, and what they cost | `infrastructure/terraform/environments/dev/main.tf`, then the modules it calls; cost table in `infrastructure/terraform/README.md` |
+| Why one thing is applied by hand and the rest from CI | `infrastructure/terraform/bootstrap/` (read the comments at the top of each file) |
 | What CI actually runs | `.github/workflows/build.yml` |
 
 If a class puzzles you, its Javadoc comment states the *why*; the unit

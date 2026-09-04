@@ -68,7 +68,8 @@ Resistance/
 │   ├── docker-compose.yml         MySQL + services + gateway
 │   ├── docker/Dockerfile          Generic multi-stage image for any module
 │   ├── kubernetes/                Namespace, MySQL, and application manifests
-│   ├── aws/                       SES inbound -> SNS CloudFormation stack + guide
+│   ├── terraform/                 AWS by code: bootstrap (once), modules, dev + prod envs
+│   ├── aws/                       How email intake works on AWS (SES -> SNS -> app)
 │   └── config/db-init/            Database schemas and seed data
 │
 ├── frontend/                      React + TypeScript SPA (login + dashboard, Vite)
@@ -142,7 +143,7 @@ Three inbound paths feed the same flow - pick whichever fits:
 | Path | Use when | Setup |
 |---|---|---|
 | `POST /intake/email` JSON webhook | You use Mailgun/SendGrid/Postmark inbound parse, or want a curl smoke test | Set `intake.webhook-token`, point the provider at the endpoint |
-| `POST /intake/aws-sns` | You run on AWS | Deploy `infrastructure/aws/ses-intake.yaml` (see `infrastructure/aws/README.md`), set `intake.aws.topic-arn` |
+| `POST /intake/aws-sns` | You run on AWS | Terraform's `email-intake` module creates the SES→SNS chain and sets `intake.aws.topic-arn` (see `infrastructure/aws/README.md`) |
 | IMAP polling | Any ordinary mailbox, e.g. Gmail + app password | `intake.imap.enabled=true` + host/username/password |
 
 Smoke test with curl:
@@ -210,9 +211,32 @@ a login redirect. The plain-language walkthrough of all of this is in
   plaintext PII. Nothing external to set up.
 - **qa** (`--spring.profiles.active=qa`): everything on AWS, enforced. The
   qa property files have no fallback values, so the services fail at startup
-  until RDS, the SES/SNS intake stack, SES SMTP credentials, the webhook
-  secret, and the KMS data key are provisioned and injected as environment
-  variables. The full checklist lives in `infrastructure/aws/README.md`.
+  until RDS, the SES/SNS intake chain, SES SMTP credentials, the webhook
+  secret, and the KMS-protected data key are provisioned and injected as
+  environment variables. Terraform creates all of them (next section); the
+  variable-by-variable checklist lives in `infrastructure/aws/README.md`.
+
+## Deploying to AWS (Terraform)
+
+`infrastructure/terraform/` describes the whole AWS footprint as code and
+GitHub Actions applies it through a short-lived OIDC role, so no AWS keys
+are stored in the repository. Two environments, `dev` and `prod`, share one
+account and one domain: `dev` receives mail at `track@dev.<domain>` and
+serves `tracker-dev.<domain>`; `prod` owns `track@<domain>` and
+`tracker.<domain>`.
+
+Cost is gated on one flag per environment. With `app_enabled = false` (the
+default) an apply creates only free things: image repositories, the SES
+domain verification and MX records, the raw-mail bucket, the SNS topic and
+the receipt rule. Flipping it to `true` adds the network, the MySQL
+instance, the secrets and the two Fargate services behind an HTTPS load
+balancer, which together cost about $45 a month while they run.
+
+- `dev` is applied on every push to `main`; `prod` only when the Terraform
+  workflow is run by hand and `prod` is chosen.
+- One-time setup (bootstrap, repository variables, the domain) and the
+  troubleshooting notes are in
+  [`infrastructure/terraform/README.md`](infrastructure/terraform/README.md).
 
 ## Security
 

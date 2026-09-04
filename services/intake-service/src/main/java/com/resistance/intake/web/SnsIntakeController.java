@@ -29,7 +29,8 @@ import java.util.Properties;
  * AWS path: SES inbound receiving -> SNS topic -> this HTTPS subscription.
  * Handles the SNS handshake (SubscriptionConfirmation) and unwraps SES
  * Notification payloads into the same IntakeService flow as the plain
- * webhook. See infrastructure/aws/ for the SES/SNS CloudFormation stack.
+ * webhook. See infrastructure/aws/README.md for the SES/SNS chain and
+ * infrastructure/terraform/modules/email-intake for the resources.
  */
 @RestController
 @RequestMapping("/intake")

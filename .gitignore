@@ -159,3 +159,29 @@ dist/
 *.bak
 *.tmp
 *~.nib
+
+
+################################################################################
+# TERRAFORM (infrastructure/terraform)
+################################################################################
+
+# provider binaries and module cache; the lock file IS committed
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# may carry secrets - example files are tracked instead
+*.auto.tfvars
+secrets.tfvars
+
+# backend config is account-specific - commit backend.hcl.example instead
+backend.hcl
