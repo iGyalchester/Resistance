@@ -1,0 +1,81 @@
+name: Deploy
+
+# Manual-only: builds the two deployed services, pushes their images to the
+# chosen environment's ECR repositories (created by the Terraform
+# workflow), and asks ECS to roll the services. Auth is the same
+# GitHub-OIDC role the Terraform workflow uses - no stored AWS keys. Safe
+# to run before the app is switched on: the redeploy step just reports
+# that there is nothing to roll yet.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy"
+        required: true
+        type: choice
+        options: [dev, prod]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  SERVICES: mvc-service intake-service
+
+jobs:
+  push-images:
+    name: build & push (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Set up JDK 26
+        uses: actions/setup-java@v5.2.0
+        with:
+          java-version: '26'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build jars
+        # tests already ran in the Build workflow for this commit
+        run: mvn -B -DskipTests -pl services/mvc-service,services/intake-service -am package
+
+      - name: Build and push images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          PREFIX: resistance-${{ inputs.environment }}
+        run: |
+          for svc in $SERVICES; do
+            image="$REGISTRY/$PREFIX/$svc"
+            docker build -f infrastructure/docker/Dockerfile.runtime \
+              --build-arg MODULE="services/$svc" \
+              -t "$image:$GITHUB_SHA" -t "$image:latest" .
+            docker push "$image:$GITHUB_SHA"
+            docker push "$image:latest"
+          done
+
+      - name: Roll the ECS services (no-op until app_enabled is applied)
+        env:
+          CLUSTER: resistance-${{ inputs.environment }}
+        run: |
+          if ! aws ecs describe-clusters --clusters "$CLUSTER" \
+              --query "clusters[?status=='ACTIVE']" --output text | grep -q .; then
+            echo "Cluster $CLUSTER not provisioned yet (app_enabled = false) - images pushed, nothing to roll."
+            exit 0
+          fi
+          for svc in $SERVICES; do
+            aws ecs update-service --cluster "$CLUSTER" --service "$svc" \
+              --force-new-deployment --query "service.serviceName" --output text
+          done

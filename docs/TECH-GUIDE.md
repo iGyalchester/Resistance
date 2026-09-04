@@ -418,6 +418,11 @@ Used only in qa/production; dev needs none of this.
 | **KMS** (Key Management Service) | managed encryption keys | protects the data key used for field encryption (below) |
 | **Route53** | AWS's DNS service; a "hosted zone" is one domain's set of records | holds the MX record that sends `track@…` mail to SES, the SES verification/DKIM records, and later the app's hostname |
 | **ECR** (Elastic Container Registry) | a private Docker image store | the Deploy workflow pushes one image per service here; ECS pulls from it |
+| **ECS Fargate** | runs containers without servers to manage: you say "this image, this much CPU and memory, this many copies" and AWS finds room for it | one *service* each for mvc-service and intake-service; a *task* is one running copy |
+| **ALB** (Application Load Balancer) | the public front door: terminates HTTPS, checks each task's health, and routes by path | `/intake/*` goes to intake-service, everything else to mvc-service; login sessions stick to one task |
+| **ACM** (Certificate Manager) | free TLS certificates, renewed automatically | the ALB's certificate for `tracker.<domain>`, proven by a DNS record Terraform writes |
+| **RDS** (Relational Database Service) | managed MySQL: backups, patching, failover handled for you | the same MySQL 8 the local container runs; its master password is generated and rotated by RDS in Secrets Manager |
+| **SSM Parameter Store** / **Secrets Manager** | places to keep secrets encrypted, with an audit trail of who read them | the field-encryption key, the webhook token and the SMTP credentials (Parameter Store); the database password (Secrets Manager); ECS injects them as environment variables at start |
 | **Terraform** | infrastructure-as-code: `.tf` files describe the resources you want, `terraform apply` makes AWS match them | [`infrastructure/terraform/`](../infrastructure/terraform/) creates every AWS resource above, for a `dev` and a `prod` environment |
 
 ### Terraform, state, and why CI has no AWS keys
@@ -485,6 +490,8 @@ warning). Details in
 | **GitHub Actions CI** | on every push, GitHub spins up a runner, starts MySQL with our real init scripts, runs `mvn verify` (compile + all tests, including full Spring context startup), and uploads the built jars; a second job type-checks, tests, and builds the React app with Node | `.github/workflows/build.yml` |
 | **CodeQL** | GitHub's static security analysis - scans the Java code for vulnerability patterns on every PR and weekly | `.github/workflows/codeql.yml` |
 | **Terraform workflow** | on a pull request: format, validate, a security scan and a plan for both environments; on a push to `main`: applies `dev`; `prod` applies only from a manual run | `.github/workflows/terraform.yml` |
+| **Deploy workflow** | manual: builds the two service jars once, stamps an image per service from `Dockerfile.runtime`, pushes to ECR, and tells ECS to roll | `.github/workflows/deploy.yml` |
+| **Health endpoint** | `/actuator/health` answers `{"status":"UP"}` when the app and its database connection are fine; the load balancer polls it and replaces a task that stops answering | Spring Boot Actuator, exposed in `application.properties`, permitted in `SecurityConfig` |
 | **Dependabot** | opens PRs when Maven dependencies or Actions versions have updates (which often carry security fixes) | `.github/dependabot.yml` |
 
 The CI detail worth appreciating: because it boots a *real* MySQL with the
@@ -514,6 +521,9 @@ history and were caught exactly there.
 | Why qa won't start | `application-qa.properties` (placeholders with no defaults) |
 | What AWS resources exist, and what they cost | `infrastructure/terraform/environments/dev/main.tf`, then the modules it calls; cost table in `infrastructure/terraform/README.md` |
 | Why one thing is applied by hand and the rest from CI | `infrastructure/terraform/bootstrap/` (read the comments at the top of each file) |
+| Where `DB_PASSWORD` and the other secrets come from on AWS | `modules/secrets/main.tf`, then the `secrets` list in `modules/app/main.tf` |
+| Why there is no NAT gateway, and what that costs | the comment at the top of `modules/network/main.tf` |
+| How the tables get created on an empty RDS | `application-qa.properties` (`spring.sql.init`) + `shared-models/.../db/job-tracker-schema.sql` + `SchemaFilesInSyncTests` |
 | What CI actually runs | `.github/workflows/build.yml` |
 
 If a class puzzles you, its Javadoc comment states the *why*; the unit

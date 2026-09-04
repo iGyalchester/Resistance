@@ -57,8 +57,10 @@ technology in the stack, kept current by convention (see below).
   demo**; never expose it publicly.
 - `infrastructure/` — docker-compose, Kubernetes, `terraform/` (AWS by
   code: `bootstrap/` once by hand, modules, `dev` + `prod` environments,
-  cost gated on `app_enabled`), and `config/db-init/` (the SQL schema
-  source of truth).
+  cost gated on `app_enabled`; the Deploy workflow pushes images), and
+  `config/db-init/` (the SQL schema source of truth; on AWS the services
+  apply the idempotent copy in `shared-models/.../db/`, kept in sync by
+  `SchemaFilesInSyncTests`).
 - Profiles: `dev` (default) is fully local; `qa` requires real AWS
   resources via fail-fast env vars (`infrastructure/aws/README.md`),
   which the Terraform app module injects.

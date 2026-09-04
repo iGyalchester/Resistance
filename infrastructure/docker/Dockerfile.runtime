@@ -1,0 +1,13 @@
+# Runtime-only image: expects the boot jar to be built already (the Deploy
+# workflow runs Maven once, then stamps one image per service from this
+# file). For a from-source build see Dockerfile next to it.
+#
+#   mvn -B -DskipTests -pl services/mvc-service -am package
+#   docker build -f infrastructure/docker/Dockerfile.runtime \
+#     --build-arg MODULE=services/mvc-service -t resistance/mvc-service .
+ARG JAVA_VERSION=26
+
+FROM eclipse-temurin:${JAVA_VERSION}-jre
+ARG MODULE
+COPY ${MODULE}/target/*.jar /app/app.jar
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

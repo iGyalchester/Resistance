@@ -13,6 +13,13 @@ modules/
   ecr/              one image repository per deployed service
   email-intake/     SES receiving for one mail domain: verification, DKIM, MX,
                     raw-mail bucket, SNS topic, receipt rule, HTTPS subscription
+  network/          VPC: public subnets (ALB + tasks), private subnets (database),
+                    three security groups; deliberately no NAT gateway
+  secrets/          KMS key; generated field-encryption key, webhook token and
+                    SES SMTP credentials as KMS-encrypted SSM parameters
+  database/         MySQL on RDS, credentials managed by RDS in Secrets Manager
+  app/              ECS Fargate cluster, two services, HTTPS ALB with a certificate
+                    and DNS record, /intake/* routed to intake-service
 environments/
   dev/              track@dev.<domain>, https://tracker-dev.<domain>
   prod/             track@<domain>,     https://tracker.<domain>
@@ -28,7 +35,9 @@ and pick it.
 | State | Monthly |
 |---|---|
 | Both environments with `app_enabled = false` (the default) | ≈ $0.50 for the hosted zone, plus cents of S3 for raw mail |
-| One environment with `app_enabled = true` | ≈ $45: ALB ≈ $16, two small Fargate tasks ≈ $15, `db.t4g.micro` MySQL ≈ $12 (free-tier eligible for a new account's first year), KMS key $1 |
+| One environment with `app_enabled = true` | ≈ $50: ALB ≈ $16, two Fargate tasks (0.25 vCPU, 1 GiB) ≈ $24, `db.t4g.micro` MySQL ≈ $12 (free-tier eligible for a new account's first year), KMS key $1 |
+| prod on all the time, dev flipped on for a demo day | ≈ $50 + about $1.50 per dev day |
+| prod with `db_multi_az = true` | + ≈ $12 for the standby |
 
 `app_enabled` is the only switch that costs real money. ECR repositories,
 SES identities, SNS topics and receipt rules are free while idle, so the
@@ -80,8 +89,74 @@ Terraform → Run workflow → `prod`.
 
 ## Turning the app on
 
-Requires the app modules from the next slice (network, database, secrets,
-app). Until then, `app_enabled` is accepted and ignored.
+Order matters: images first, then compute. Fargate pulls the image on
+start; with an empty repository every task crash-loops while the ALB and
+RDS bill by the hour.
+
+1. **Deploy workflow** (Actions → Deploy → Run workflow → `dev`). It builds
+   the two jars once, stamps one image per service from
+   `infrastructure/docker/Dockerfile.runtime`, pushes `:latest` and `:<git sha>`
+   to the environment's ECR repositories, and reports that there is no
+   cluster to roll yet.
+2. Set `app_enabled = true` in `environments/dev/terraform.tfvars`, merge
+   to `main`. The apply creates the VPC, the database (about ten minutes
+   the first time), the secrets, the certificate (validated by DNS records
+   in the hosted zone, a few minutes), the load balancer, the two services,
+   and the SNS subscription to `https://tracker-dev.<domain>/intake/aws-sns`.
+3. Check, in order:
+   - `curl https://tracker-dev.<domain>/actuator/health` → `{"status":"UP"}`
+     (the ALB uses the same path; ECS shows both services *healthy*).
+   - `curl https://tracker-dev.<domain>/intake/actuator/health` is a 404 on
+     purpose: only `/intake/*` reaches intake-service and it has no such
+     path. Its health is what the ALB target group reports.
+   - intake-service logs (CloudWatch → `/resistance/resistance-dev/services`)
+     contain "Confirmed SNS subscription".
+   - Request a login code on the site; the OTP mail arrives from
+     `otp@dev.<domain>` (only to verified addresses while in the SES sandbox).
+   - Forward a confirmation email to your personal `track+<alias>@dev.<domain>`
+     address from the dashboard; it appears as an application.
+4. When the demo is over, set `app_enabled = false` and merge. What
+   survives: the ECR images, the raw-mail bucket, the CloudWatch logs.
+   What does not: the database (dev takes no final snapshot), the secrets
+   (a fresh key next time, so encrypted rows would not survive anyway).
+
+Later deploys are just the Deploy workflow again: it pushes the new
+`:latest` and forces a new deployment; the circuit breaker rolls back if
+the new tasks never become healthy.
+
+## Going live (prod)
+
+The same three steps against `prod`, applied by hand from the Actions tab
+rather than by a push:
+
+1. Deploy → Run workflow → `prod`.
+2. `app_enabled = true` in `environments/prod/terraform.tfvars`, merge, then
+   Terraform → Run workflow → `prod`. prod's tfvars keep the data: deletion
+   protection on the instance and the load balancer, a final snapshot on
+   destroy, seven days of backups, ninety days of logs, a thirty-day window
+   before a scheduled key deletion takes effect.
+3. SES production access (once per account, free) so login codes reach
+   anyone, not only verified addresses. Then `dig MX <domain>` shows SES,
+   `dig tracker.<domain>` shows the load balancer, and the DKIM records
+   show *Successful* in the SES console.
+
+To scale: `db_instance_class` and `db_multi_az` for the database,
+`task_cpu` / `task_memory` / `desired_count` for the services (mvc-service
+sessions stick to a task, so more than one is safe). Each is one line of
+tfvars and one apply.
+
+## Optional integrations
+
+Both are ARNs of Secrets Manager secrets you create by hand, so the value
+never touches a file in this repository:
+
+```bash
+aws secretsmanager create-secret --name resistance/prod/audit-token --secret-string '<token>'
+aws secretsmanager create-secret --name resistance/prod/anthropic-api-key --secret-string '<key>'
+```
+
+then `audit_url` + `audit_token_secret_arn` (AuditFlow) and
+`anthropic_api_key_secret_arn` (Claude-backed parsing) in tfvars.
 
 ## Working locally
 
@@ -120,6 +195,21 @@ brings a new service.
 
 It skips itself while the `AWS_ROLE_ARN` repository variable is unset
 (step 3 above). Format, validate and tfsec still run.
+
+### A service keeps restarting
+
+CloudWatch → `/resistance/<name>/services` → the service's stream. The
+usual causes: the `qa` profile fails fast on a missing variable (the log
+names it; compare with `application-qa.properties`), or the database is
+still starting (the first apply can take ten minutes; ECS retries). A
+task that starts but is never *healthy* is the load balancer failing
+`/actuator/health`, which includes a database ping.
+
+### The SNS subscription stays "pending confirmation"
+
+SNS could not reach `https://<app host>/intake/aws-sns`: the certificate
+is not validated yet, or intake-service is not healthy. Fix that, then
+re-run the apply; the subscription resource retries the confirmation.
 
 ### Mail to `track@dev.<domain>` bounces
 

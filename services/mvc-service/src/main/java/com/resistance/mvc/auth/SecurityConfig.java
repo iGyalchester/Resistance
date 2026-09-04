@@ -40,6 +40,8 @@ public class SecurityConfig {
         http.authorizeHttpRequests(configurer ->
                 configurer
                         .requestMatchers("/login", "/login/**", "/logout", "/css/**", "/error").permitAll()
+                        // the load balancer's health check; reports only UP/DOWN
+                        .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/api/auth/code", "/api/auth/login").permitAll()
                         .anyRequest().authenticated()
         );
