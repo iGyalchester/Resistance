@@ -234,9 +234,13 @@ balancer, which together cost about $50 a month while they run.
 
 - `dev` is applied on every push to `main`; `prod` only when the Terraform
   workflow is run by hand and `prod` is chosen.
-- The **Deploy** workflow (manual) builds the two service images, pushes
-  them to the environment's registry and rolls the services. Run it before
-  flipping `app_enabled`, and again for every release.
+- The **Deploy** workflow (manual, `main` only) builds the two service
+  images, pushes them tagged with the commit sha, records that sha in
+  `/resistance/<env>/image-tag`, and asks the Terraform workflow to roll the
+  services onto it. Run it before flipping `app_enabled`, and again for
+  every release. Images are immutable and Terraform stays the only writer of
+  task definitions, so each release is a distinct revision and a rollback
+  goes back to a specific build rather than to a moving `:latest`.
 - On AWS the services apply an idempotent copy of the schema at startup
   (`shared-models/.../db/job-tracker-schema.sql`, `CREATE TABLE IF NOT
   EXISTS` only); a test keeps it identical to the local init script.

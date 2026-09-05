@@ -11,8 +11,9 @@ locals {
 module "ecr" {
   source = "../../modules/ecr"
 
-  name = local.name
-  tags = local.tags
+  name        = local.name
+  environment = local.environment
+  tags        = local.tags
 }
 
 module "email_intake" {
@@ -86,10 +87,14 @@ module "app" {
   app_host                = var.app_host
 
   repository_urls = module.ecr.repository_urls
-  image_tag       = var.image_tag
-  desired_count   = var.desired_count
-  task_cpu        = var.task_cpu
-  task_memory     = var.task_memory
+
+  # Not a tfvars setting: the Deploy workflow writes the sha it pushed into
+  # the SSM parameter modules/ecr manages, and this reads it back. One
+  # writer for images, one writer for task definitions, no drift between.
+  image_tag     = module.ecr.image_tag
+  desired_count = var.desired_count
+  task_cpu      = var.task_cpu
+  task_memory   = var.task_memory
 
   log_retention_days      = var.log_retention_days
   alb_deletion_protection = var.alb_deletion_protection

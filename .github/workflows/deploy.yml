@@ -1,11 +1,22 @@
 name: Deploy
 
-# Manual-only: builds the two deployed services, pushes their images to the
-# chosen environment's ECR repositories (created by the Terraform
-# workflow), and asks ECS to roll the services. Auth is the same
-# GitHub-OIDC role the Terraform workflow uses - no stored AWS keys. Safe
-# to run before the app is switched on: the redeploy step just reports
-# that there is nothing to roll yet.
+# Manual-only. Builds the two deployed services, pushes one image per
+# service tagged with this commit's sha, records that sha as the tag the
+# environment should run, and asks the Terraform workflow to roll the
+# services onto it. Auth is the same GitHub-OIDC role the Terraform
+# workflow uses - no stored AWS keys.
+#
+# Two rules make a rollback mean something:
+#
+#   - Images are tagged with the git sha and the repositories are
+#     IMMUTABLE. A tag always names the same bytes, so a task definition
+#     names a specific build.
+#   - Terraform stays the only writer of task definitions. This workflow
+#     hands it the sha through an SSM parameter and asks it to apply,
+#     rather than mutating the service behind Terraform's back.
+#
+# Safe to run before the app is switched on: with no cluster it pushes the
+# images, records the sha, and stops.
 on:
   workflow_dispatch:
     inputs:
@@ -16,8 +27,9 @@ on:
         options: [dev, prod]
 
 permissions:
-  id-token: write
+  id-token: write # assume the AWS role via OIDC
   contents: read
+  actions: write # dispatch the Terraform workflow to roll the services
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
@@ -25,10 +37,18 @@ env:
   SERVICES: mvc-service intake-service
 
 jobs:
-  push-images:
-    name: build & push (${{ inputs.environment }})
+  deploy:
+    name: build, push & roll (${{ inputs.environment }})
     runs-on: ubuntu-latest
+    # Deploying anything other than the stable branch would put a commit on
+    # AWS that never passed the develop -> main gate.
+    if: github.ref == 'refs/heads/main'
     environment: ${{ inputs.environment }}
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      CLUSTER: resistance-${{ inputs.environment }}
+      PREFIX: resistance-${{ inputs.environment }}
+      PARAMETER: /resistance/${{ inputs.environment }}/image-tag
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -48,6 +68,20 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # The parameter is created by modules/ecr, so its absence means the
+      # environment has never been applied. Failing here is much clearer
+      # than an apply later complaining about a "bootstrap" image tag.
+      - name: Read the current image tag
+        id: current
+        run: |
+          if ! previous=$(aws ssm get-parameter --name "$PARAMETER" \
+              --query "Parameter.Value" --output text 2>/dev/null); then
+            echo "::error::$PARAMETER does not exist. Apply Terraform for $ENVIRONMENT first (it creates the ECR repositories and this parameter)."
+            exit 1
+          fi
+          echo "Currently deployed tag: $previous"
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+
       - name: Build jars
         # tests already ran in the Build workflow for this commit
         run: mvn -B -DskipTests -pl services/mvc-service,services/intake-service -am package
@@ -55,27 +89,119 @@ jobs:
       - name: Build and push images
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
-          PREFIX: resistance-${{ inputs.environment }}
         run: |
           for svc in $SERVICES; do
             image="$REGISTRY/$PREFIX/$svc"
+            # IMMUTABLE repositories reject a re-push of an existing tag, so
+            # re-running the workflow for the same commit is a no-op rather
+            # than an error.
+            if aws ecr describe-images --repository-name "$PREFIX/$svc" \
+                --image-ids imageTag="$GITHUB_SHA" >/dev/null 2>&1; then
+              echo "$svc:$GITHUB_SHA already pushed - skipping."
+              continue
+            fi
             docker build -f infrastructure/docker/Dockerfile.runtime \
               --build-arg MODULE="services/$svc" \
-              -t "$image:$GITHUB_SHA" -t "$image:latest" .
+              -t "$image:$GITHUB_SHA" .
             docker push "$image:$GITHUB_SHA"
-            docker push "$image:latest"
           done
 
-      - name: Roll the ECS services (no-op until app_enabled is applied)
-        env:
-          CLUSTER: resistance-${{ inputs.environment }}
+      - name: Record the tag to run
         run: |
-          if ! aws ecs describe-clusters --clusters "$CLUSTER" \
+          aws ssm put-parameter --name "$PARAMETER" --type String \
+            --value "$GITHUB_SHA" --overwrite --output text >/dev/null
+          echo "Recorded $GITHUB_SHA in $PARAMETER."
+
+      # Nothing to roll before the first apply with app_enabled = true. The
+      # tag is already recorded, so that apply picks it up.
+      - name: Is there a cluster to roll?
+        id: cluster
+        run: |
+          if aws ecs describe-clusters --clusters "$CLUSTER" \
               --query "clusters[?status=='ACTIVE']" --output text | grep -q .; then
-            echo "Cluster $CLUSTER not provisioned yet (app_enabled = false) - images pushed, nothing to roll."
-            exit 0
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Cluster $CLUSTER not provisioned yet (app_enabled = false) - images pushed and tag recorded, nothing to roll."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
-          for svc in $SERVICES; do
-            aws ecs update-service --cluster "$CLUSTER" --service "$svc" \
-              --force-new-deployment --query "service.serviceName" --output text
+
+      # Terraform owns task definitions, so the roll is a Terraform apply,
+      # not an update-service. rollout_only makes that apply refuse to touch
+      # anything except the task definitions and services - an image deploy
+      # must never quietly apply unrelated infrastructure changes sitting on
+      # main.
+      - name: Roll the services through Terraform
+        if: steps.cluster.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_TAG: ${{ steps.current.outputs.previous }}
+        run: |
+          set -euo pipefail
+
+          roll_back() {
+            echo "::error::Rollout of $GITHUB_SHA failed. Restoring $PARAMETER to $PREVIOUS_TAG."
+            aws ssm put-parameter --name "$PARAMETER" --type String \
+              --value "$PREVIOUS_TAG" --overwrite --output text >/dev/null
+            echo "The ECS circuit breaker rolls the running tasks back to the previous"
+            echo "task definition on its own. Re-run the Terraform workflow for"
+            echo "$ENVIRONMENT (rollout_only) to bring Terraform's state back in line."
+          }
+          trap 'roll_back' ERR
+
+          since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          gh workflow run terraform.yml \
+            -f environment="$ENVIRONMENT" -f rollout_only=true
+
+          # workflow_dispatch returns no run id, so find the run it started.
+          run_id=""
+          for _ in $(seq 1 30); do
+            run_id=$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/terraform.yml/runs?event=workflow_dispatch&per_page=10" \
+              --jq "[.workflow_runs[] | select(.created_at >= \"$since\")] | .[0].id // empty")
+            [ -n "$run_id" ] && break
+            sleep 5
           done
+          if [ -z "$run_id" ]; then
+            echo "::error::Dispatched the Terraform workflow but could not find its run."
+            exit 1
+          fi
+
+          echo "Watching Terraform run $run_id"
+          gh run watch "$run_id" --exit-status
+
+      - name: Confirm the services are running the new image
+        if: steps.cluster.outputs.exists == 'true'
+        env:
+          PREVIOUS_TAG: ${{ steps.current.outputs.previous }}
+        run: |
+          set -euo pipefail
+
+          roll_back() {
+            echo "::error::$1"
+            echo "Restoring $PARAMETER to $PREVIOUS_TAG."
+            aws ssm put-parameter --name "$PARAMETER" --type String \
+              --value "$PREVIOUS_TAG" --overwrite --output text >/dev/null
+            exit 1
+          }
+
+          # shellcheck disable=SC2086
+          if ! aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICES; then
+            roll_back "Services did not reach a stable state."
+          fi
+
+          # Stable is not the same as "running what we asked for": a
+          # circuit-breaker rollback also ends stable, on the OLD revision.
+          for svc in $SERVICES; do
+            wanted=$(aws ecs describe-task-definition \
+              --task-definition "$CLUSTER-$svc" \
+              --query "taskDefinition.taskDefinitionArn" --output text)
+            running=$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" \
+              --query "services[0].deployments[?status=='PRIMARY'].taskDefinition | [0]" \
+              --output text)
+            if [ "$wanted" != "$running" ]; then
+              roll_back "$svc is serving $running, not the new $wanted - the deployment was rolled back."
+            fi
+            echo "$svc is running $running"
+          done
+
+          echo "Both services are running $GITHUB_SHA."

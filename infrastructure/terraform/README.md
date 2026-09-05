@@ -93,11 +93,17 @@ Order matters: images first, then compute. Fargate pulls the image on
 start; with an empty repository every task crash-loops while the ALB and
 RDS bill by the hour.
 
-1. **Deploy workflow** (Actions → Deploy → Run workflow → `dev`). It builds
-   the two jars once, stamps one image per service from
-   `infrastructure/docker/Dockerfile.runtime`, pushes `:latest` and `:<git sha>`
-   to the environment's ECR repositories, and reports that there is no
-   cluster to roll yet.
+0. **Apply once first.** The image tag lives in an SSM parameter that
+   `modules/ecr` creates, so the environment has to exist before anything can
+   be deployed into it. A push to `main` (dev) or a manual Terraform run
+   (prod) creates the ECR repositories and the parameter, seeded with the
+   placeholder value `bootstrap`.
+1. **Deploy workflow** (Actions → Deploy → Run workflow → `dev`, from `main`).
+   It builds the two jars once, stamps one image per service from
+   `infrastructure/docker/Dockerfile.runtime`, pushes `:<git sha>` to the
+   environment's ECR repositories, writes that sha into
+   `/resistance/dev/image-tag`, and reports that there is no cluster to roll
+   yet.
 2. Set `app_enabled = true` in `environments/dev/terraform.tfvars`, merge
    to `main`. The apply creates the VPC, the database (about ten minutes
    the first time), the secrets, the certificate (validated by DNS records
@@ -120,15 +126,44 @@ RDS bill by the hour.
    What does not: the database (dev takes no final snapshot), the secrets
    (a fresh key next time, so encrypted rows would not survive anyway).
 
-Later deploys are just the Deploy workflow again: it pushes the new
-`:latest` and forces a new deployment; the circuit breaker rolls back if
-the new tasks never become healthy.
+Later deploys are just the Deploy workflow again. It pushes `:<git sha>`,
+writes the sha to the parameter, then dispatches this workflow with
+`rollout_only=true` and waits for it. That apply refuses to proceed if the
+plan touches anything except the task definitions and the services, so an
+image deploy can never quietly apply unrelated infrastructure that happens
+to be sitting on `main`.
+
+Deploy then waits for the services to stabilise and checks that each one's
+PRIMARY deployment really is the *new* task definition revision - "stable"
+alone is not enough, because a circuit-breaker rollback also ends stable, on
+the old revision. If anything fails it puts the previous sha back in the
+parameter and fails the run.
+
+**Why it is built this way.** `:latest` used to be the deployed tag. Because
+the tag never changed, the task definition never changed either: ECS could
+not tell one release from the next, `--force-new-deployment` was the only way
+to make it restart, and the circuit breaker's "rollback" rolled back to the
+identical image that had just failed. Now the repositories are IMMUTABLE, the
+tag is the commit sha, `skip_destroy` keeps old task definition revisions
+ACTIVE, and rolling back means pointing at a revision that still exists and
+still names the bytes it always named.
+
+**Rolling back by hand:** put the last good sha into the parameter and run
+this workflow with `rollout_only=true`.
+
+```bash
+aws ssm put-parameter --name /resistance/dev/image-tag --type String --value <good sha> --overwrite
+gh workflow run terraform.yml -f environment=dev -f rollout_only=true
+```
 
 ## Going live (prod)
 
-The same three steps against `prod`, applied by hand from the Actions tab
-rather than by a push:
+The same steps against `prod`, applied by hand from the Actions tab rather
+than by a push:
 
+0. Terraform → Run workflow → `prod` once, to create prod's ECR
+   repositories and its `/resistance/prod/image-tag` parameter. Deploy fails
+   with a clear message until they exist.
 1. Deploy → Run workflow → `prod`.
 2. `app_enabled = true` in `environments/prod/terraform.tfvars`, merge, then
    Terraform → Run workflow → `prod`. prod's tfvars keep the data: deletion

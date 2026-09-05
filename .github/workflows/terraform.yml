@@ -24,6 +24,11 @@ on:
         required: true
         type: choice
         options: [dev, prod]
+      rollout_only:
+        description: "Only roll the ECS services onto a new image (used by the Deploy workflow). Fails if the plan touches anything else."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   id-token: write # required to assume the AWS role via OIDC
@@ -161,6 +166,55 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
         run: terraform init -backend-config=backend.hcl -input=false
 
+      # Plan to a file and apply that exact file, so what is applied is what
+      # the guard below inspected - not a second, later plan.
+      - name: terraform plan
+        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
+        run: terraform plan -out=tfplan -var-file=terraform.tfvars -input=false
+
+      # A Deploy run must move the image and nothing else. Without this, an
+      # unrelated change sitting on main would ride along with the next image
+      # deploy - a database replacement, say, that nobody was watching for.
+      - name: Refuse anything but a service rollout
+        if: inputs.rollout_only
+        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          changed=$(terraform show -json tfplan | jq -r '
+            (.resource_changes // [])[]
+            | select(.change.actions != ["no-op"] and .change.actions != ["read"])
+            | .address')
+
+          if [ -z "$changed" ]; then
+            echo "Plan is empty - the services already run this image."
+            exit 0
+          fi
+
+          echo "Planned changes:"
+          echo "$changed"
+
+          unexpected=0
+          while IFS= read -r address; do
+            case "$address" in
+              'module.app[0].aws_ecs_task_definition.service['*) ;;
+              'module.app[0].aws_ecs_service.service['*) ;;
+              *)
+                if [ "$unexpected" = 0 ]; then
+                  echo "::error::rollout_only was requested, but the plan also changes resources outside the ECS services:"
+                fi
+                unexpected=1
+                echo "  $address"
+                ;;
+            esac
+          done <<PLAN
+          $changed
+          PLAN
+
+          if [ "$unexpected" = 1 ]; then
+            echo "Apply those deliberately with a normal Terraform run first."
+            exit 1
+          fi
+
       - name: terraform apply
         working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
-        run: terraform apply -var-file=terraform.tfvars -input=false -auto-approve
+        run: terraform apply -input=false -auto-approve tfplan

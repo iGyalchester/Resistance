@@ -417,7 +417,7 @@ Used only in qa/production; dev needs none of this.
 | **S3** | file storage | keeps the raw email (30-day expiry) |
 | **KMS** (Key Management Service) | managed encryption keys | protects the data key used for field encryption (below) |
 | **Route53** | AWS's DNS service; a "hosted zone" is one domain's set of records | holds the MX record that sends `track@…` mail to SES, the SES verification/DKIM records, and later the app's hostname |
-| **ECR** (Elastic Container Registry) | a private Docker image store | the Deploy workflow pushes one image per service here; ECS pulls from it |
+| **ECR** (Elastic Container Registry) | a private Docker image store | the Deploy workflow pushes one image per service here, tagged with the git commit sha; the repositories are *immutable*, so a tag always names the same bytes and a rollback can name a specific build |
 | **ECS Fargate** | runs containers without servers to manage: you say "this image, this much CPU and memory, this many copies" and AWS finds room for it | one *service* each for mvc-service and intake-service; a *task* is one running copy |
 | **ALB** (Application Load Balancer) | the public front door: terminates HTTPS, checks each task's health, and routes by path | `/intake/*` goes to intake-service, everything else to mvc-service; login sessions stick to one task |
 | **ACM** (Certificate Manager) | free TLS certificates, renewed automatically | the ALB's certificate for `tracker.<domain>`, proven by a DNS record Terraform writes |

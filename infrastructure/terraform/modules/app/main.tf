@@ -281,6 +281,11 @@ resource "aws_ecs_task_definition" "service" {
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.execution.arn
 
+  # Keep old revisions ACTIVE. Rolling back is then "point the service at
+  # revision N-1", which needs revision N-1 to still exist; without this
+  # Terraform deregisters it the moment a new one is registered.
+  skip_destroy = true
+
   container_definitions = jsonencode([
     {
       name      = each.key
