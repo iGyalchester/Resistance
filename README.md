@@ -326,6 +326,11 @@ the tenant the token may write as. Ours is `resistance=<secret>`, matching
 `tracker.audit.customer-id=resistance`; events claiming any other
 `customerId` come back 403.
 
+Each event carries `occurredAt`, taken from this machine's clock at the
+moment the audited thing happened rather than whenever the asynchronous
+send lands. Delivery being slow no longer moves an event into the next
+report window.
+
 The full two-system test walkthrough is in
 [docs/E2E-TEST-PLAN.md](docs/E2E-TEST-PLAN.md).
 

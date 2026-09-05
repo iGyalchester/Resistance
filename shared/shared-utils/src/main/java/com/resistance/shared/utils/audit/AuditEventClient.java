@@ -5,6 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -69,6 +70,12 @@ public class AuditEventClient {
         try {
             Map<String, String> fields = new LinkedHashMap<>();
             fields.put("eventId", UUID.randomUUID().toString());
+            // Our clock, read here on the calling thread - before the async
+            // send, before any queueing, before the network. AuditFlow used
+            // to stamp arrival time instead, so a slow or retried delivery
+            // moved the event; a login failure at 09:59 could land in the
+            // 10:00 report window. Instant.toString() is ISO-8601.
+            fields.put("occurredAt", Instant.now().toString());
             fields.put("customerId", customerId);
             fields.put("userId", userId);
             fields.put("type", type);

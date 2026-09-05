@@ -414,6 +414,13 @@ rejected with a 403 rather than filed. So `tracker.audit.customer-id` and
 the tenant half of AuditFlow's token entry have to agree, or every event
 is refused. Ours is `resistance` on both sides.
 
+Each event also carries `occurredAt`, read from our clock on the calling
+thread - before the async send, before the network. AuditFlow used to
+stamp arrival time instead, which meant a slow or retried delivery moved
+the event: a login failure at 09:59 could be filed in the 10:00 report
+window. The emitter is fire-and-forget precisely so it can be slow, so
+the source has to be the one that says when.
+
 Two design rules worth internalizing:
 
 - **Auditing must never break the app.** Emission is asynchronous with a
