@@ -159,13 +159,21 @@ a secret token required in every state-changing POST - is on, and Thymeleaf
 injects the token into every `th:action` form automatically. That's also
 why deletes are POST forms instead of links: a GET that changes state can
 be triggered by a simple `<img>` tag.
-**Owner-scoping:** the multi-user boundary lives in
-`JobApplicationServiceImpl` - every query and mutation takes the acting
-account's id, and someone else's application is indistinguishable from a
-missing one. The tests in `JobApplicationOwnershipTests` demonstrate each
-denied path.
+**Owner-scoping:** the multi-user boundary lives in the service layer -
+`JobApplicationServiceImpl` for applications, `ContactServiceImpl` for
+contacts. Every query and mutation takes the acting account's id, and
+someone else's row is indistinguishable from a missing one. Contacts are a
+per-user address book rather than a shared directory: two users who hear
+from the same recruiter each get their own row, and intake matches on
+owner *and* email when it files a new one. One subtlety worth knowing: the
+application form's contact dropdown posts an id, and the converter that
+turns that id back into an entity has no request context, so it cannot
+check who is asking - `saveForOwner` refuses a contact belonging to another
+account instead. `JobApplicationOwnershipTests` and `ContactOwnershipTests`
+demonstrate each denied path.
 **Where:** `mvc-service/.../auth/SecurityConfig.java`,
-`auth/LoginController.java`, `service/JobApplicationServiceImpl.java`.
+`auth/LoginController.java`, `service/JobApplicationServiceImpl.java`,
+`service/ContactServiceImpl.java`.
 
 ### Passwordless OTP login
 

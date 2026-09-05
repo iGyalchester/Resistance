@@ -120,7 +120,8 @@ class IntakeServiceTests {
         existing.setId(43);
         when(applications.findByOwnerIdAndCompanyNameIgnoreCase(7, "Initech"))
                 .thenReturn(List.of(existing));
-        when(contacts.findByEmailIgnoreCase("dana.reyes@initech.com")).thenReturn(Optional.empty());
+        when(contacts.findByOwnerIdAndEmailIgnoreCase(7, "dana.reyes@initech.com"))
+                .thenReturn(Optional.empty());
         when(parser.parse(EMAIL)).thenReturn(Optional.of(new ParsedApplication(
                 "Initech", "Java Developer", ApplicationStatus.INTERVIEW,
                 "Dana Reyes", "dana.reyes@initech.com")));
@@ -132,6 +133,40 @@ class IntakeServiceTests {
         assertNotNull(existing.getContact());
         assertEquals("Dana", existing.getContact().getFirstName());
         assertEquals("Reyes", existing.getContact().getLastName());
+        // the new contact lands in this account's address book, nobody else's
+        assertSame(account, existing.getContact().getOwner());
+    }
+
+    @Test
+    void theSameRecruiterForTwoOwnersBecomesTwoContacts() {
+        UserAccount other = new UserAccount("Other Person", "other@example.com");
+        other.setId(9);
+        other.setIntakeAlias("otherq7m2xz");
+        when(accounts.findByIntakeAlias("otherq7m2xz")).thenReturn(Optional.of(other));
+        when(applications.findByOwnerIdAndCompanyNameIgnoreCase(anyInt(), anyString()))
+                .thenReturn(List.of());
+        when(parser.parse(any())).thenReturn(Optional.of(new ParsedApplication(
+                "Initech", "Java Developer", ApplicationStatus.APPLIED,
+                "Dana Reyes", "dana.reyes@initech.com")));
+
+        // account 7 already has Dana in its address book; account 9 does not
+        Contact mine = new Contact("Dana", "Reyes", "dana.reyes@initech.com", account);
+        mine.setId(5);
+        when(contacts.findByOwnerIdAndEmailIgnoreCase(7, "dana.reyes@initech.com"))
+                .thenReturn(Optional.of(mine));
+        when(contacts.findByOwnerIdAndEmailIgnoreCase(9, "dana.reyes@initech.com"))
+                .thenReturn(Optional.empty());
+
+        intakeService.process(EMAIL);
+        intakeService.process(new InboundEmail("someone@else.example", "Someone Else",
+                "track+otherq7m2xz@resistance.example", "Fwd: anything", "body"));
+
+        // exactly one new row: account 7 reused its own, account 9 got its own
+        org.mockito.ArgumentCaptor<Contact> created =
+                org.mockito.ArgumentCaptor.forClass(Contact.class);
+        org.mockito.Mockito.verify(contacts).save(created.capture());
+        assertEquals(9, created.getValue().getOwner().getId());
+        assertEquals("dana.reyes@initech.com", created.getValue().getEmail());
     }
 
     @Test

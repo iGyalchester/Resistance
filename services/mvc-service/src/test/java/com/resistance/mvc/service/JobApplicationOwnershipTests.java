@@ -4,6 +4,7 @@ import com.resistance.mvc.dao.JobApplicationRepository;
 import com.resistance.mvc.dao.StatusHistoryRepository;
 import com.resistance.mvc.dao.UserAccountRepository;
 import com.resistance.shared.models.entity.ApplicationStatus;
+import com.resistance.shared.models.entity.Contact;
 import com.resistance.shared.models.entity.JobApplication;
 import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
@@ -89,6 +90,32 @@ class JobApplicationOwnershipTests {
 
         assertThrows(IllegalArgumentException.class, () -> service.saveForOwner(forged, 1));
         verify(applications, never()).save(any());
+    }
+
+    @Test
+    void saveWithAnotherOwnersContactIsRefused() {
+        // the application form posts a contact id and the converter resolves
+        // it without any request context, so a hand-edited dropdown value is
+        // the attack: link my application to your recruiter and read them
+        Contact theirContact = new Contact("Dana", "Reyes", "dana.reyes@acme.example", someoneElse);
+        theirContact.setId(9);
+        JobApplication mine = new JobApplication("Globex", "Data Engineer", ApplicationStatus.APPLIED);
+        mine.setContact(theirContact);
+
+        assertThrows(IllegalArgumentException.class, () -> service.saveForOwner(mine, 1));
+        verify(applications, never()).save(any());
+    }
+
+    @Test
+    void saveWithYourOwnContactIsAllowed() {
+        Contact myContact = new Contact("Marcus", "Lee", "marcus.lee@initech.example", me);
+        myContact.setId(10);
+        JobApplication mine = new JobApplication("Globex", "Data Engineer", ApplicationStatus.APPLIED);
+        mine.setContact(myContact);
+
+        service.saveForOwner(mine, 1);
+
+        verify(applications).save(mine);
     }
 
     @Test
