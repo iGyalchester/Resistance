@@ -116,6 +116,21 @@ data "aws_iam_policy_document" "ci_boundary" {
     actions   = ["ses:SendEmail", "ses:SendRawEmail"]
     resources = ["*"]
   }
+
+  # intake-service's task role reads the MIME SES archived. The boundary is
+  # a ceiling, not a grant: the role's own policy is scoped to the one
+  # bucket. Without this line that policy would be capped away and the
+  # service would fall back to header-only parsing, which looks like a
+  # parser bug rather than a permissions one.
+  #
+  # Read only, and no s3:ListBucket: the object key always arrives in the
+  # notification, so nothing needs to enumerate the bucket.
+  statement {
+    sid       = "ReadArchivedMail"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["arn:aws:s3:::resistance-*-raw-mail-*/*"]
+  }
 }
 
 resource "aws_iam_policy" "ci_boundary" {

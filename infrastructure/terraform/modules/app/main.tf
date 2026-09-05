@@ -165,8 +165,10 @@ resource "aws_route53_record" "app" {
   }
 }
 
-# --- IAM: the execution role starts the container; the code itself needs
-#     no AWS permissions (mail goes over SMTP, SNS pushes to us) ------------
+# --- IAM: the execution role starts the container. The code itself needs
+#     almost no AWS permissions - mail goes out over SMTP and SNS pushes to
+#     us - with one exception: intake-service reads the raw MIME that SES
+#     archived, so it gets a task role scoped to that bucket. ---------------
 
 data "aws_iam_policy_document" "task_assume" {
   statement {
@@ -220,6 +222,33 @@ resource "aws_iam_role_policy" "execution_secrets" {
   policy = data.aws_iam_policy_document.execution_secrets.json
 }
 
+# The role the *application* runs as, as opposed to the execution role the
+# ECS agent uses to pull the image and read secrets. Only intake-service
+# gets it, and it can do exactly one thing: read objects out of the raw-mail
+# bucket. No ListBucket - the object key always arrives in the notification,
+# so the service never needs to discover what is in there.
+resource "aws_iam_role" "intake_task" {
+  name                 = "${var.name}-intake-task"
+  assume_role_policy   = data.aws_iam_policy_document.task_assume.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
+}
+
+data "aws_iam_policy_document" "intake_raw_mail" {
+  statement {
+    sid       = "ReadArchivedMail"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["arn:aws:s3:::${var.raw_mail_bucket_name}/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "intake_raw_mail" {
+  name   = "${var.name}-read-raw-mail"
+  role   = aws_iam_role.intake_task.id
+  policy = data.aws_iam_policy_document.intake_raw_mail.json
+}
+
 # --- task definitions: exactly the qa profile's environment -----------------
 
 locals {
@@ -242,6 +271,7 @@ locals {
     ]
     intake-service = [
       { name = "INTAKE_AWS_TOPIC_ARN", value = var.intake_topic_arn },
+      { name = "INTAKE_RAW_MAIL_BUCKET", value = var.raw_mail_bucket_name },
     ]
   }
 
@@ -281,6 +311,11 @@ resource "aws_ecs_task_definition" "service" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.execution.arn
+
+  # Only intake-service needs an identity of its own, to read the archived
+  # MIME out of the raw-mail bucket. mvc-service gets none: it talks to
+  # MySQL and SMTP and has no business holding AWS credentials.
+  task_role_arn = each.key == "intake-service" ? aws_iam_role.intake_task.arn : null
 
   # Keep old revisions ACTIVE. Rolling back is then "point the service at
   # revision N-1", which needs revision N-1 to still exist; without this

@@ -102,10 +102,11 @@ module "app" {
   kms_key_arn    = module.secrets[0].kms_key_arn
   parameter_arns = module.secrets[0].parameter_arns
 
-  smtp_host        = "email-smtp.${var.aws_region}.amazonaws.com"
-  otp_from_address = "${var.otp_local_part}@${var.mail_domain}"
-  intake_address   = module.email_intake.intake_address
-  intake_topic_arn = module.email_intake.topic_arn
+  smtp_host            = "email-smtp.${var.aws_region}.amazonaws.com"
+  otp_from_address     = "${var.otp_local_part}@${var.mail_domain}"
+  intake_address       = module.email_intake.intake_address
+  intake_topic_arn     = module.email_intake.topic_arn
+  raw_mail_bucket_name = module.email_intake.raw_mail_bucket_name
 
   permissions_boundary_arn = var.permissions_boundary_arn
 

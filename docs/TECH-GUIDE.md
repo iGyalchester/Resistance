@@ -171,6 +171,19 @@ per-IP OTP throttle into a single bucket every user in the world shares.
 those headers from an internal proxy address, so a caller cannot forge its
 own IP or scheme. `MvcServiceApplicationTests.ForwardedHeaders` proves the
 redirect comes back as `https://`.
+**Why the body comes from S3:** SES can deliver a received message two
+ways. An `sns_action` embeds the whole thing, base64-encoded, in the
+notification it publishes — simple, and it was how this worked. But SNS
+refuses a notification larger than 150 KB and SES *bounces* the mail rather
+than delivering it, so a confirmation email with a company logo attached
+never arrived at all. The `s3_action` instead writes the message to a
+bucket and notifies the topic with the object's name, and intake-service
+reads it back. SES's own 40 MB limit is then the only ceiling. The service
+still prefers an inline `content` field when one is there, which is what
+keeps local and test paths working with no bucket and no AWS credentials.
+Reading needs an identity, so intake-service (and only intake-service) runs
+with an ECS **task role** allowing `s3:GetObject` on that one bucket — no
+`ListBucket`, because the key always arrives in the notification.
 **Why mail is not a health check:** the ALB polls `/actuator/health` every
 30 seconds per task and requires a 200. Setting `spring.mail.host` (the qa
 profile does, for SES) makes Spring Boot register a `MailHealthIndicator`,
@@ -463,7 +476,7 @@ Used only in qa/production; dev needs none of this.
 | Service | One-sentence explanation | Role here |
 |---|---|---|
 | **SES** (Simple Email Service) | AWS's email send/receive service | *Receives* mail for the whole domain (via an MX DNS record), which is what makes each user's `track+<alias>@` address work, and can also *send* our OTP emails over SMTP |
-| **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES publishes each received email to a topic and the topic POSTs it to `/intake/aws-sns`; this is the only action that carries the email *body*, so the parser depends on it |
+| **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES archives each received email to S3 and the same action notifies a topic, which POSTs to `/intake/aws-sns`; the notification names the object rather than carrying it, and intake-service reads the MIME back with its task role — see "Why the body comes from S3" below |
 | **S3** | file storage | archives the raw email for 30 days, for debugging a parse that went wrong |
 | **KMS** (Key Management Service) | managed encryption keys | protects the data key used for field encryption (below) |
 | **Route53** | AWS's DNS service; a "hosted zone" is one domain's set of records | holds the MX record that sends `track@…` mail to SES, the SES verification/DKIM records, and later the app's hostname |

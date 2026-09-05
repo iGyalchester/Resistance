@@ -13,8 +13,11 @@ bootstrap/          applied ONCE by hand with your own credentials: the state bu
 modules/
   ecr/              one image repository per deployed service
   email-intake/     SES receiving for one mail domain: verification, DKIM, MX,
-                    raw-mail archive bucket, SNS topic, a receipt rule that
-                    publishes each message (body included) to SNS
+                    raw-mail bucket, SNS topic, and a receipt rule that writes
+                    each message to the bucket and notifies the topic. The
+                    notification names the object; intake-service reads the
+                    MIME back, so message size is bounded by SES's 40 MB
+                    rather than SNS's 150 KB
   network/          VPC: public subnets (ALB + tasks), private subnets (database),
                     three security groups; deliberately no NAT gateway
   secrets/          KMS key; generated field-encryption key, webhook token and
