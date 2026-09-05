@@ -17,6 +17,14 @@
 			<groupId>com.resistance</groupId>
 			<artifactId>shared-models</artifactId>
 		</dependency>
+		<!-- Reads the raw MIME that SES archives in S3. The SNS notification
+		     cannot carry a message over 150 KB, so anything larger arrived
+		     with an empty body (or, with an sns_action, was bounced by SES
+		     outright). Version comes from the BOM in the root pom. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>

@@ -138,3 +138,7 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+variable "raw_mail_bucket_name" {
+  description = "Bucket the email-intake module archives inbound SES mail to. intake-service reads the raw MIME from here, which is what lets a message larger than SNS's 150 KB notification limit be parsed at all."
+  type        = string
+}

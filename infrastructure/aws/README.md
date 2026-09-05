@@ -24,16 +24,26 @@ SNS topic ──HTTPS subscription──> POST https://<app host>/intake/aws-sns
 - SES allows exactly one *active* receipt rule set per account and region.
   That is why the rule set is created in `bootstrap/` and each environment
   only adds a rule for its own recipient.
-- The rule has **two** actions and they do different jobs. The `s3_action`
-  archives the raw MIME so a bad parse can be investigated later. The
-  `sns_action` is the one intake-service reads, because SES includes the
-  message itself - base64 MIME in the notification's `content` field - only
-  for an SNS action. An S3 action that merely notifies a topic sends
-  metadata and no body, and the parser then has nothing to work with.
-- The SNS action refuses a message larger than 150 KB and SES bounces it.
-  A bounce is visible to whoever forwarded the mail, which is the point;
-  reading the archived S3 object instead would lift the ceiling to SES's own
-  40 MB limit and is the planned follow-up.
+- The rule has exactly **one** action: an `s3_action` with a `topic_arn`.
+  It writes the raw MIME to the bucket and publishes a notification naming
+  the object (`receipt.action.bucketName` / `objectKey`). intake-service
+  reads the message back from there with its task role.
+- Why not an `sns_action`, which embeds the base64 MIME in the notification
+  directly? Because SNS refuses a notification larger than **150 KB** and
+  SES bounces the mail rather than delivering it - so a confirmation email
+  with a logo attached is rejected outright. Reading from S3 has no ceiling
+  below SES's own 40 MB. intake-service still prefers an inline `content`
+  field when one is present, which keeps the local and test paths working
+  without a bucket.
+- One action, not both, on purpose: two actions publish two notifications
+  for the same mail, and whichever arrived first would decide how it parsed.
+- intake-service's permissions for this are a **task role** (distinct from
+  the ECS execution role) allowing `s3:GetObject` on that bucket and nothing
+  else. No `ListBucket` - the object key always arrives in the notification.
+  mvc-service gets no task role at all. Note that the CI permissions
+  boundary must allow `s3:GetObject` too, or the role's own policy is capped
+  away and mail silently arrives without a body; `bootstrap/oidc.tf` has it,
+  and bootstrap has to be re-applied by hand for it to take effect.
 - intake-service verifies every SNS message's signature against the AWS
   signing certificate (`intake.aws.verify-signature=true` in `qa`), so a
   forged POST to the endpoint is rejected even if the URL leaks.
