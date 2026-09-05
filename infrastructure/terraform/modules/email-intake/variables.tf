@@ -30,12 +30,6 @@ variable "raw_mail_expiry_days" {
   default     = 30
 }
 
-variable "intake_endpoint_url" {
-  description = "Public HTTPS URL of intake-service's /intake/aws-sns endpoint. Empty until the app is deployed: SNS can only confirm an HTTPS subscription against a running endpoint, so the subscription is created only when this is set."
-  type        = string
-  default     = ""
-}
-
 variable "tags" {
   type    = map(string)
   default = {}

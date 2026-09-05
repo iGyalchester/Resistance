@@ -337,7 +337,43 @@ resource "aws_ecs_service" "service" {
     rollback = true
   }
 
+  # Make "created" mean "tasks are running and healthy behind the ALB".
+  # Without this the resource completes as soon as ECS accepts the desired
+  # count, which is minutes before anything answers a request - and the SNS
+  # subscription below depends on something answering.
+  wait_for_steady_state = true
+
   depends_on = [aws_lb_listener.https]
 
   tags = var.tags
+}
+
+# --- SNS: subscribe intake-service to the topic ----------------------------
+#
+# This lives here rather than in modules/email-intake because SNS confirms an
+# HTTPS subscription by POSTing to the endpoint and waiting for the service
+# to fetch the SubscribeURL back (SnsIntakeController does that). So the
+# subscription can only be created once DNS resolves, the certificate is
+# attached and the tasks are healthy. The two dependencies below cover that:
+# the DNS record directly, and the service both for health (it now waits for
+# steady state) and, transitively, for the validated HTTPS listener it
+# already depends on.
+#
+# Nothing is leaked by a public endpoint URL: every message's signature is
+# verified against the AWS signing certificate before it is acted on.
+resource "aws_sns_topic_subscription" "intake" {
+  topic_arn              = var.intake_topic_arn
+  protocol               = "https"
+  endpoint               = "https://${var.app_host}/intake/aws-sns"
+  endpoint_auto_confirms = true
+
+  # The default is 1 minute. A cold task plus DNS propagation regularly needs
+  # longer, and a timeout here leaves a "pending confirmation" subscription
+  # that silently drops every email until someone notices.
+  confirmation_timeout_in_minutes = 10
+
+  depends_on = [
+    aws_ecs_service.service,
+    aws_route53_record.app,
+  ]
 }

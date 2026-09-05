@@ -3,7 +3,8 @@
 #   user forwards email to track@<mail_domain>
 #     -> MX record sends it to SES receiving
 #     -> receipt rule stores the raw MIME in S3 and notifies an SNS topic
-#     -> topic POSTs to intake-service's /intake/aws-sns (HTTPS subscription)
+#     -> topic POSTs to intake-service's /intake/aws-sns (the subscription
+#        itself is created by modules/app, which knows when the service is up)
 #
 # and the SES domain identity that lets mvc-service send OTP mail from the
 # same domain. Everything here is free or pennies (S3 for a few emails), so
@@ -176,15 +177,6 @@ resource "aws_ses_receipt_rule" "intake" {
   ]
 }
 
-# intake-service confirms the subscription itself (SnsIntakeController), and
-# verifies every message's signature, so a leaked topic ARN or endpoint URL
-# gains an attacker nothing.
-resource "aws_sns_topic_subscription" "intake" {
-  count = var.intake_endpoint_url == "" ? 0 : 1
-
-  topic_arn                       = aws_sns_topic.intake.arn
-  protocol                        = "https"
-  endpoint                        = var.intake_endpoint_url
-  endpoint_auto_confirms          = true
-  confirmation_timeout_in_minutes = 5
-}
+# The HTTPS subscription to this topic lives in modules/app, not here: SNS
+# confirms it by calling the endpoint, so it can only be created once the
+# service answering that URL is actually running. See the comment there.

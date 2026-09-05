@@ -12,14 +12,16 @@ bootstrap/          applied ONCE by hand with your own credentials: the state bu
 modules/
   ecr/              one image repository per deployed service
   email-intake/     SES receiving for one mail domain: verification, DKIM, MX,
-                    raw-mail bucket, SNS topic, receipt rule, HTTPS subscription
+                    raw-mail bucket, SNS topic, receipt rule
   network/          VPC: public subnets (ALB + tasks), private subnets (database),
                     three security groups; deliberately no NAT gateway
   secrets/          KMS key; generated field-encryption key, webhook token and
                     SES SMTP credentials as KMS-encrypted SSM parameters
   database/         MySQL on RDS, credentials managed by RDS in Secrets Manager
   app/              ECS Fargate cluster, two services, HTTPS ALB with a certificate
-                    and DNS record, /intake/* routed to intake-service
+                    and DNS record, /intake/* routed to intake-service, and the
+                    topic's HTTPS subscription (it can only be confirmed once the
+                    service answering it is up, so it belongs with the service)
 environments/
   dev/              track@dev.<domain>, https://tracker-dev.<domain>
   prod/             track@<domain>,     https://tracker.<domain>
@@ -102,7 +104,11 @@ RDS bill by the hour.
    to `main`. The apply creates the VPC, the database (about ten minutes
    the first time), the secrets, the certificate (validated by DNS records
    in the hosted zone, a few minutes), the load balancer, the two services,
-   and the SNS subscription to `https://tracker-dev.<domain>/intake/aws-sns`.
+   and last the SNS subscription to
+   `https://tracker-dev.<domain>/intake/aws-sns`. The subscription is
+   deliberately last: SNS confirms it by calling the endpoint, so the ECS
+   service is created with `wait_for_steady_state` and the subscription
+   waits on both it and the DNS record.
 3. Check, in order:
    - `curl https://tracker-dev.<domain>/actuator/health` → `{"status":"UP"}`
      (the ALB uses the same path; ECS shows both services *healthy*).
@@ -170,6 +176,16 @@ terraform init -backend-config=backend.hcl
 terraform plan -var-file=terraform.tfvars
 ```
 
+The lock files carry checksums for linux, macOS (Intel and Apple silicon)
+and Windows, so `init` works from any of them. If you add or upgrade a
+provider, regenerate them for all four rather than letting your own machine
+narrow the file - otherwise everyone else's `init` fails on a checksum
+mismatch:
+
+```bash
+terraform providers lock   -platform=linux_amd64 -platform=windows_amd64   -platform=darwin_arm64 -platform=darwin_amd64
+```
+
 `terraform fmt -check -recursive` and `terraform validate` need no AWS
 credentials and are what the pull-request job runs.
 
@@ -207,8 +223,11 @@ task that starts but is never *healthy* is the load balancer failing
 
 ### The SNS subscription stays "pending confirmation"
 
-SNS could not reach `https://<app host>/intake/aws-sns`: the certificate
-is not validated yet, or intake-service is not healthy. Fix that, then
+SNS could not reach `https://<app host>/intake/aws-sns` within the
+confirmation window (10 minutes). The apply already waits for the ECS
+service to reach steady state and for the DNS record before creating the
+subscription, so the usual remaining causes are the certificate not being
+validated yet or intake-service failing its health check. Fix that, then
 re-run the apply; the subscription resource retries the confirmation.
 
 ### Mail to `track@dev.<domain>` bounces
