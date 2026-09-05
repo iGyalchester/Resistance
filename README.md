@@ -240,6 +240,11 @@ balancer, which together cost about $50 a month while they run.
 - On AWS the services apply an idempotent copy of the schema at startup
   (`shared-models/.../db/job-tracker-schema.sql`, `CREATE TABLE IF NOT
   EXISTS` only); a test keeps it identical to the local init script.
+- The load balancer terminates HTTPS and forwards plain HTTP, so the `qa`
+  profile sets `server.forward-headers-strategy=native` in both services.
+  Without it, login redirects come back as `http://`, cookies lose their
+  `Secure` flag, and every request looks like it came from the load
+  balancer — which would put every user in one OTP rate-limit bucket.
 - One-time setup (bootstrap, repository variables, the domain) and the
   troubleshooting notes are in
   [`infrastructure/terraform/README.md`](infrastructure/terraform/README.md).
