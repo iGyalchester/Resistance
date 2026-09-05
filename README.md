@@ -143,7 +143,7 @@ Three inbound paths feed the same flow - pick whichever fits:
 | Path | Use when | Setup |
 |---|---|---|
 | `POST /intake/email` JSON webhook | You use Mailgun/SendGrid/Postmark inbound parse, or want a curl smoke test | Set `intake.webhook-token`, point the provider at the endpoint |
-| `POST /intake/aws-sns` | You run on AWS | Terraform's `email-intake` module creates the SES→SNS chain and sets `intake.aws.topic-arn` (see `infrastructure/aws/README.md`) |
+| `POST /intake/aws-sns` | You run on AWS | Terraform's `email-intake` module creates the SES→SNS chain (the receipt rule publishes the message body to SNS and archives the raw MIME in S3) and sets `intake.aws.topic-arn` (see `infrastructure/aws/README.md`) |
 | IMAP polling | Any ordinary mailbox, e.g. Gmail + app password | `intake.imap.enabled=true` + host/username/password |
 
 Smoke test with curl:
