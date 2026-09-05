@@ -412,9 +412,9 @@ Used only in qa/production; dev needs none of this.
 
 | Service | One-sentence explanation | Role here |
 |---|---|---|
-| **SES** (Simple Email Service) | AWS's email send/receive service | *Receives* mail for `track@yourdomain.com` (via an MX DNS record) and can also *send* our OTP emails over SMTP |
-| **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES publishes each received email to a topic; the topic POSTs it to `/intake/aws-sns` |
-| **S3** | file storage | keeps the raw email (30-day expiry) |
+| **SES** (Simple Email Service) | AWS's email send/receive service | *Receives* mail for the whole domain (via an MX DNS record), which is what makes each user's `track+<alias>@` address work, and can also *send* our OTP emails over SMTP |
+| **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES publishes each received email to a topic and the topic POSTs it to `/intake/aws-sns`; this is the only action that carries the email *body*, so the parser depends on it |
+| **S3** | file storage | archives the raw email for 30 days, for debugging a parse that went wrong |
 | **KMS** (Key Management Service) | managed encryption keys | protects the data key used for field encryption (below) |
 | **Route53** | AWS's DNS service; a "hosted zone" is one domain's set of records | holds the MX record that sends `track@…` mail to SES, the SES verification/DKIM records, and later the app's hostname |
 | **ECR** (Elastic Container Registry) | a private Docker image store | the Deploy workflow pushes one image per service here; ECS pulls from it |

@@ -12,7 +12,9 @@ bootstrap/          applied ONCE by hand with your own credentials: the state bu
 modules/
   ecr/              one image repository per deployed service
   email-intake/     SES receiving for one mail domain: verification, DKIM, MX,
-                    raw-mail bucket, SNS topic, receipt rule, HTTPS subscription
+                    raw-mail archive bucket, SNS topic, a receipt rule that
+                    publishes each message (body included) to SNS, HTTPS
+                    subscription
   network/          VPC: public subnets (ALB + tasks), private subnets (database),
                     three security groups; deliberately no NAT gateway
   secrets/          KMS key; generated field-encryption key, webhook token and
