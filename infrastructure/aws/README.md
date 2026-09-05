@@ -65,6 +65,14 @@ creates a send-only IAM user and derives them, so you never do it by hand.
 Until the account has SES production access, mail is only delivered to
 addresses you have verified in the SES console.
 
+Note that SES availability is **not** wired into the health endpoint. Boot
+would happily do that for you - `spring.mail.host` is set, so it registers a
+`MailHealthIndicator` - but the ALB probes health every 30 seconds per task
+and requires a 200, which would turn any SES hiccup into every task being
+drained and replaced at once. `management.health.mail.enabled=false` keeps
+it out. If SES is down you will see warnings from the OTP mailer, and users
+cannot receive codes; the rest of the tracker keeps working.
+
 ## PII encryption
 
 QA/production encrypt PII columns (currently `user_account.phone`; annotate

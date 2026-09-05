@@ -226,6 +226,14 @@ a login redirect. The plain-language walkthrough of all of this is in
   environment variables. Terraform creates all of them (next section); the
   variable-by-variable checklist lives in `infrastructure/aws/README.md`.
 
+Both services answer `/actuator/health` for the load balancer, which polls
+it every 30 seconds and requires a 200. The mail check is deliberately not
+part of it (`management.health.mail.enabled=false`): with `spring.mail.host`
+set, Spring Boot would open an SMTP connection to SES on every probe, so one
+SES hiccup would mark every task unhealthy at once and take the tracker
+offline because outbound email was unwell. The database check stays, since a
+tracker that cannot reach its data really is broken.
+
 ## Deploying to AWS (Terraform)
 
 `infrastructure/terraform/` describes the whole AWS footprint as code and

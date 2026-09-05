@@ -68,4 +68,36 @@ class MvcServiceApplicationTests {
 		}
 	}
 
+	/**
+	 * With spring.mail.host set, Boot registers MailHealthIndicator and every
+	 * ALB probe opens an SMTP connection. The probe runs every 30 seconds per
+	 * task and the target group requires a 200, so a single SES hiccup would
+	 * mark every task DOWN at once - the ALB drains the service and ECS
+	 * replaces the tasks, taking the tracker offline because *outbound email*
+	 * is unwell.
+	 *
+	 * Port 1 on localhost is closed, so this is that outage: if the indicator
+	 * ever comes back, health goes DOWN and this test fails. Nested so the
+	 * local build's "!MvcServiceApplicationTests" exclusion still covers it.
+	 */
+	@Nested
+	@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+			properties = {"spring.mail.host=127.0.0.1", "spring.mail.port=1"})
+	class UnreachableSmtp {
+
+		@Value("${local.server.port}")
+		private int smtpPort;
+
+		@Test
+		void healthIsUpWhenSmtpIsUnreachable() throws Exception {
+			HttpResponse<String> response = HttpClient.newHttpClient().send(
+					HttpRequest.newBuilder(URI.create(
+							"http://localhost:" + smtpPort + "/actuator/health")).GET().build(),
+					HttpResponse.BodyHandlers.ofString());
+
+			assertThat(response.statusCode()).isEqualTo(200);
+			assertThat(response.body()).contains("UP");
+		}
+	}
+
 }

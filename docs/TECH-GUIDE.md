@@ -171,6 +171,20 @@ per-IP OTP throttle into a single bucket every user in the world shares.
 those headers from an internal proxy address, so a caller cannot forge its
 own IP or scheme. `MvcServiceApplicationTests.ForwardedHeaders` proves the
 redirect comes back as `https://`.
+**Why mail is not a health check:** the ALB polls `/actuator/health` every
+30 seconds per task and requires a 200. Setting `spring.mail.host` (the qa
+profile does, for SES) makes Spring Boot register a `MailHealthIndicator`,
+which opens an SMTP connection on every one of those probes. So a single
+SES hiccup would mark every task DOWN at the same moment: the ALB drains
+the whole service and ECS starts replacing tasks — the tracker goes
+offline because *outbound email* is unwell. It also means an SMTP
+connection every 30 seconds per task purely to ask whether SES is there.
+`management.health.mail.enabled=false` turns the indicator off in every
+profile. The database check stays, because a tracker that cannot reach its
+data really is unhealthy; mail failures stay visible as warnings from the
+OTP mailer, which already degrades to logging the code.
+`MvcServiceApplicationTests.UnreachableSmtp` points the app at a closed
+port and asserts health is still UP.
 **Owner-scoping:** the multi-user boundary lives in the service layer -
 `JobApplicationServiceImpl` for applications, `ContactServiceImpl` for
 contacts. Every query and mutation takes the acting account's id, and
@@ -546,7 +560,7 @@ warning). Details in
 | **CodeQL** | GitHub's static security analysis - scans the Java code for vulnerability patterns on every PR and weekly | `.github/workflows/codeql.yml` |
 | **Terraform workflow** | on a pull request: format, validate, a security scan and a plan for both environments; on a push to `main`: applies `dev`; `prod` applies only from a manual run | `.github/workflows/terraform.yml` |
 | **Deploy workflow** | manual: builds the two service jars once, stamps an image per service from `Dockerfile.runtime`, pushes to ECR, and tells ECS to roll | `.github/workflows/deploy.yml` |
-| **Health endpoint** | `/actuator/health` answers `{"status":"UP"}` when the app and its database connection are fine; the load balancer polls it and replaces a task that stops answering | Spring Boot Actuator, exposed in `application.properties`, permitted in `SecurityConfig` |
+| **Health endpoint** | `/actuator/health` answers `{"status":"UP"}` when the app and its database connection are fine; the load balancer polls it every 30s and replaces a task that stops answering. The **mail** check is deliberately excluded (`management.health.mail.enabled=false`) — see "Why mail is not a health check" below | Spring Boot Actuator, exposed in `application.properties`, permitted in `SecurityConfig` |
 | **Dependabot** | opens PRs when Maven dependencies or Actions versions have updates (which often carry security fixes) | `.github/dependabot.yml` |
 
 The CI detail worth appreciating: because it boots a *real* MySQL with the
