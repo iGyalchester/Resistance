@@ -29,7 +29,9 @@ kms_deletion_window_days = 7
 task_cpu      = 256
 task_memory   = 1024
 desired_count = 1
-image_tag     = "latest"
+
+# No image_tag here on purpose: the Deploy workflow writes the sha it pushed
+# to /resistance/<env>/image-tag and Terraform reads it back from there.
 
 # Optional integrations - secrets are ARNs of Secrets Manager secrets you
 # create by hand, never the values themselves.

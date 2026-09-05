@@ -108,12 +108,6 @@ variable "desired_count" {
   default = 1
 }
 
-variable "image_tag" {
-  description = "Image tag the services run. The Deploy workflow pushes :latest plus the git SHA."
-  type        = string
-  default     = "latest"
-}
-
 variable "audit_url" {
   description = "AuditFlow ingestion-service URL. Empty = audit events are not emitted."
   type        = string

@@ -41,8 +41,8 @@ variable "repository_urls" {
 }
 
 variable "image_tag" {
-  type    = string
-  default = "latest"
+  description = "Tag to run, from module.ecr.image_tag (the git sha the Deploy workflow last pushed). Never a moving tag: a task definition has to name specific bytes for a rollback to mean anything."
+  type        = string
 }
 
 variable "desired_count" {
