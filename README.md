@@ -66,7 +66,7 @@ Resistance/
 │
 ├── infrastructure/
 │   ├── docker-compose.yml         MySQL + services + gateway
-│   ├── docker/Dockerfile          Generic multi-stage image for any module
+│   ├── docker/Dockerfile          Generic multi-stage image for any module (+ Dockerfile.runtime for CI)
 │   ├── kubernetes/                Namespace, MySQL, and application manifests
 │   ├── terraform/                 AWS by code: bootstrap (once), modules, dev + prod envs
 │   ├── aws/                       How email intake works on AWS (SES -> SNS -> app)
@@ -230,10 +230,16 @@ default) an apply creates only free things: image repositories, the SES
 domain verification and MX records, the raw-mail bucket, the SNS topic and
 the receipt rule. Flipping it to `true` adds the network, the MySQL
 instance, the secrets and the two Fargate services behind an HTTPS load
-balancer, which together cost about $45 a month while they run.
+balancer, which together cost about $50 a month while they run.
 
 - `dev` is applied on every push to `main`; `prod` only when the Terraform
   workflow is run by hand and `prod` is chosen.
+- The **Deploy** workflow (manual) builds the two service images, pushes
+  them to the environment's registry and rolls the services. Run it before
+  flipping `app_enabled`, and again for every release.
+- On AWS the services apply an idempotent copy of the schema at startup
+  (`shared-models/.../db/job-tracker-schema.sql`, `CREATE TABLE IF NOT
+  EXISTS` only); a test keeps it identical to the local init script.
 - One-time setup (bootstrap, repository variables, the domain) and the
   troubleshooting notes are in
   [`infrastructure/terraform/README.md`](infrastructure/terraform/README.md).
