@@ -489,8 +489,21 @@ and `environments/prod` call the same modules with different inputs.
 The chicken-and-egg problem: the state bucket cannot be created by a
 configuration whose state lives in that bucket. So `bootstrap/` is a small
 configuration you apply once by hand; it creates the bucket, the CI role,
-and the two account-level things AWS allows only one of (the hosted zone
-and the active SES receipt rule set).
+and the account-level things AWS allows only one of (the hosted zone and
+the active SES receipt rule set).
+
+There is a third such singleton, and it is the one this repo does *not*
+create: the **GitHub OIDC provider**. Its URL
+(`token.actions.githubusercontent.com`) is its identity, and an account
+may hold exactly one. Both this repo's bootstrap and
+auditflow-infrastructure's need a provider at that URL, and both used to
+create it unconditionally - so whichever was applied second failed with
+`EntityAlreadyExists`. Worse, the obvious fix under pressure (delete it,
+re-apply) breaks CI for whichever repo already trusted it. So ownership is
+explicit: auditflow-infrastructure creates it, this bootstrap reads it
+with a data source, and `create_oidc_provider` says which side you are on.
+The trust policy names `local.oidc_provider_arn` either way, so nothing
+downstream cares.
 
 CI never holds an AWS key. GitHub issues each workflow run a short-lived
 signed token (**OIDC**, the same idea as "log in with Google"), and the

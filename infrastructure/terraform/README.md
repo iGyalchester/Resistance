@@ -64,6 +64,16 @@ always-on set can stay applied indefinitely.
 
    Keep `bootstrap/terraform.tfstate` somewhere safe (it is gitignored); it
    is the only state not stored in S3, because it creates the S3 bucket.
+
+   **The GitHub OIDC provider is shared with auditflow-infrastructure.** AWS
+   allows exactly one provider per URL per account, and both repos need one
+   for `token.actions.githubusercontent.com`. auditflow-infrastructure
+   creates it; this bootstrap reads it, which is why
+   `create_oidc_provider` defaults to **false** here. If you are applying
+   this bootstrap into an account where that provider does not exist yet,
+   pass `-var="create_oidc_provider=true"` and set the other repo's to
+   false instead - but only ever one of the two. Applying both with `true`
+   is what used to fail with `EntityAlreadyExists`.
 3. **Repository variables** (Settings → Secrets and variables → Actions →
    Variables), from `terraform output`:
 
