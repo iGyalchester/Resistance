@@ -405,7 +405,16 @@ multi-user PII-holding app eventually gets asked: *who did what, when?*
 dependencies) POSTs JSON to AuditFlow's ingestion endpoint with a shared
 `X-Audit-Token` secret. Three properties control it
 (`tracker.audit.url/token/customer-id`); a blank URL disables it, which is
-the dev default. Two design rules worth internalizing:
+the dev default.
+
+On the AuditFlow side that token is **bound to one tenant**: its
+`AUDIT_INGESTION_TOKENS` entry is `resistance=<the same secret>`, and
+posting an event whose `customerId` is anything but `resistance` is
+rejected with a 403 rather than filed. So `tracker.audit.customer-id` and
+the tenant half of AuditFlow's token entry have to agree, or every event
+is refused. Ours is `resistance` on both sides.
+
+Two design rules worth internalizing:
 
 - **Auditing must never break the app.** Emission is asynchronous with a
   2-second timeout and swallows every failure (logged, dropped). That

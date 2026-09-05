@@ -69,6 +69,13 @@ technology in the stack, kept current by convention (see below).
 
 React slices remaining: application/contact CRUD → status-history
 timeline view → profile page + shipping the built app in docker-compose,
-then decide on retiring Thymeleaf. Deferred backlog: CD via GitHub
-OIDC→ECS, production DB choice (DynamoDB vs DocumentDB), deterministic
-encryption for email lookup fields, SMS OTP delivery.
+then decide on retiring Thymeleaf.
+
+**Built since this list was written**: CD via GitHub OIDC→ECS is done
+(`infrastructure/terraform` + the Deploy workflow, which pushes
+SHA-tagged images to an IMMUTABLE ECR repo and hands the tag to Terraform
+through an SSM parameter, so a rollback re-points the parameter rather
+than racing `:latest`).
+
+Deferred backlog: production DB choice (DynamoDB vs DocumentDB),
+deterministic encryption for email lookup fields, SMS OTP delivery.
