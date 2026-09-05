@@ -9,9 +9,10 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
- * AES-256-GCM field encryption. The data key is generated and managed by
- * AWS KMS (aws kms generate-data-key) and injected as base64 through the
- * environment - the application never creates or persists key material.
+ * AES-256-GCM field encryption. The data key is generated outside the app
+ * (Terraform, stored KMS-encrypted in SSM Parameter Store) and injected as
+ * base64 through the environment - the application never creates or
+ * persists key material.
  * Values are stored as "enc:v1:" + base64(iv || ciphertext+tag); anything
  * without that prefix is treated as legacy plaintext and passed through,
  * so enabling encryption does not break existing rows.

@@ -55,10 +55,13 @@ technology in the stack, kept current by convention (see below).
   From header.
 - `services/rest-api-service` (8083) — deliberately **unsecured legacy
   demo**; never expose it publicly.
-- `infrastructure/` — docker-compose, Kubernetes, SES CloudFormation,
-  and `config/db-init/` (the SQL schema source of truth).
+- `infrastructure/` — docker-compose, Kubernetes, `terraform/` (AWS by
+  code: `bootstrap/` once by hand, modules, `dev` + `prod` environments,
+  cost gated on `app_enabled`), and `config/db-init/` (the SQL schema
+  source of truth).
 - Profiles: `dev` (default) is fully local; `qa` requires real AWS
-  resources via fail-fast env vars (`infrastructure/aws/README.md`).
+  resources via fail-fast env vars (`infrastructure/aws/README.md`),
+  which the Terraform app module injects.
 
 ## Roadmap
 
