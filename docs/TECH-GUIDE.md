@@ -291,8 +291,12 @@ Thymeleaf pages; `SessionAuthenticator` is the shared piece that turns a
 verified code into an authenticated session for both. Entities never go on
 the wire — flat records (`ApplicationView`, `MeView`) do, so lazy-loading
 proxies and fields like the owner link can't leak by accident.
-**Why not rest-api-service?** that module (port 8083) is the unsecured
-legacy demo. The real API lives where the security machinery already is.
+**Why not security-service?** that module is the course's REST demo, kept
+as a reference. The real API lives where the security machinery already
+is. (`rest-api-service`, its unsecured twin, has been deleted: it was
+`security-service` minus its security config, and a module whose whole
+purpose was "the version without the safety on" is a liability, not a
+lesson.)
 **Where:** `api/AuthApiController.java`, `api/ApplicationApiController.java`,
 tests in `src/test/java/com/resistance/mvc/api/`.
 
@@ -572,7 +576,7 @@ warning). Details in
 | **Docker / docker-compose** | containers = apps packaged with their environment; compose starts a whole set (MySQL + services + gateway) with one command | `infrastructure/docker-compose.yml`, generic image recipe in `infrastructure/docker/Dockerfile` |
 | **Kubernetes manifests** | YAML describing how a cluster should run the same containers (replicas, ports, env) | `infrastructure/kubernetes/` |
 | **DB init scripts** | plain SQL that creates schemas and seed rows; both local MySQL and CI mount them | `infrastructure/config/db-init/` |
-| **API gateway** | one front door on port 8080 that forwards `/rest-api/**`, `/intake/**` etc. to the right service — a hand-rolled ~80-line proxy, deliberately not a framework | `api-gateway/` |
+| **API gateway** | one front door on port 8080 that forwards `/security/**`, `/intake/**` etc. to the right service — a hand-rolled ~80-line proxy, deliberately not a framework | `api-gateway/` |
 | **GitHub Actions CI** | on every push, GitHub spins up a runner, starts MySQL with our real init scripts, runs `mvn verify` (compile + all tests, including full Spring context startup), and uploads the built jars; a second job type-checks, tests, and builds the React app with Node | `.github/workflows/build.yml` |
 | **CodeQL** | GitHub's static security analysis - scans the Java code for vulnerability patterns on every PR and weekly | `.github/workflows/codeql.yml` |
 | **Terraform workflow** | on a pull request: format, validate, a security scan and a plan for both environments; on a push to `main`: applies `dev`; `prod` applies only from a manual run | `.github/workflows/terraform.yml` |

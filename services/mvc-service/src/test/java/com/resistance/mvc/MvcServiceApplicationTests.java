@@ -23,6 +23,24 @@ class MvcServiceApplicationTests {
 	}
 
 	/**
+	 * "/" used to serve a course demo: an applicant registration form with
+	 * no connection to the tracker, on the one URL a visitor is most likely
+	 * to type. It now redirects to the dashboard, which for an anonymous
+	 * caller means the security chain sends them on to /login.
+	 */
+	@Test
+	void rootRedirectsRatherThanServingADemoForm() throws Exception {
+		HttpResponse<Void> response = HttpClient.newBuilder()
+				.followRedirects(HttpClient.Redirect.NEVER).build()
+				.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/")).GET().build(),
+						HttpResponse.BodyHandlers.discarding());
+
+		assertThat(response.statusCode()).isEqualTo(302);
+		assertThat(response.headers().firstValue("Location").orElseThrow())
+				.doesNotContain("applicant");
+	}
+
+	/**
 	 * The AWS load balancer probes this anonymously through the real filter
 	 * chain; it must answer 200, never redirect to /login.
 	 */

@@ -32,7 +32,6 @@
 		<!-- Services -->
 		<module>services/core-service</module>
 		<module>services/data-service</module>
-		<module>services/rest-api-service</module>
 		<module>services/security-service</module>
 		<module>services/mvc-service</module>
 		<module>services/mvc-security-service</module>
