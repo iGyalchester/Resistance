@@ -318,7 +318,15 @@ endpoint, where they become SOC 2/GDPR evidence and can trigger alert
 rules (e.g. repeated login failures). Emission is asynchronous and
 fire-and-forget: auditing being down never breaks the tracker
 (at-most-once delivery, by design). Blank URL = disabled, the dev
-default. The full two-system test walkthrough is in
+default.
+
+`TRACKER_AUDIT_TOKEN` has to match the token half of an
+`AUDIT_INGESTION_TOKENS` entry on the AuditFlow side, and that entry names
+the tenant the token may write as. Ours is `resistance=<secret>`, matching
+`tracker.audit.customer-id=resistance`; events claiming any other
+`customerId` come back 403.
+
+The full two-system test walkthrough is in
 [docs/E2E-TEST-PLAN.md](docs/E2E-TEST-PLAN.md).
 
 ## Production database (decision pending)

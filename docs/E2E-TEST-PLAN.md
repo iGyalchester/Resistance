@@ -36,11 +36,13 @@ large report windows, and the React UI (covered by its own Vitest suite).
 | Resistance unit | `AuditEventClientTests` | JSON escaping, token header, fire-and-forget never blocks/throws, disabled mode |
 | Resistance unit | `JobApplicationOwnershipTests`, `ContactOwnershipTests`, `IntakeServiceTests` | emissions fire on CREATE/UPDATE/DELETE/provisioning — and **not** on refused foreign-owner operations; applications and contacts are both scoped to the acting account |
 | Resistance unit | `ContactControllerTests` | the owner id comes from the session only; another user's contact is a redirect, not a form |
-| AuditFlow unit | `IngestTokenFilterTest` | open/dev mode, constant-time match, 401 on wrong/missing token |
+| AuditFlow unit | `IngestTokenFilterTest`, `TenantTokensTest` | open/dev mode, constant-time match, 401 on wrong/missing token; a token spec parses to one tenant per token and rejects duplicates at startup |
+| AuditFlow unit | `EventIngestionControllerTenantBindingTest` | a token bound to one tenant cannot file evidence under another `customerId` (403, nothing published) |
 | AuditFlow unit | `QueryRedactorTest`, `MySqlGeneralLogCollectorTest` | PII literals stripped, noise filtered, deterministic ids |
 | AuditFlow IT (CI) | `EventIngestionIntegrationTest` | HTTP → Kafka against a real broker |
 | AuditFlow IT (CI) | `MySqlGeneralLogCollectorIntegrationTest` | a PII-bearing query round-trips **redacted** from a real MySQL general log; checkpoint holds until committed |
-| AuditFlow IT (CI) | `AuroraWriterAdapterIntegrationTest` | idempotent insert against real Postgres, controls persisted |
+| AuditFlow IT (CI) | `AuroraWriterAdapterIntegrationTest` | idempotent insert against real Postgres, controls persisted; the same `eventId` under two tenants is two rows, a redelivery is one |
+| AuditFlow IT (CI) | `EnrichmentPipelineIntegrationTest` | a failing sink is retried with back-off and then recovers; poison bytes and a never-recovering event land on `audit-events.DLT` instead of being dropped |
 | AuditFlow unit | `CognitoJwtAuthTest` | gateway accepts a valid Cognito ID token for the app client and rejects expired / wrong-issuer / wrong-audience / access / unsigned / no-tenant tokens |
 | AuditFlow IT (CI) | `RepositoriesIntegrationTest` | audit logs, alerts and rules are scoped per customer against real Postgres; a cross-tenant upsert cannot hijack a row |
 | AuditFlow IT (CI) | `AlertingEndToEndTest` | seed rules → Postgres → Kafka → real Slack webhook call → `alert_history` row |
@@ -57,8 +59,12 @@ The shortest path from "a person mistypes a login code in Resistance" to
 "a compliance platform shows the alert". Two terminals, both repos.
 
 ```bash
-# auditflow-platform: the whole platform in containers (jars first)
-mvn -DskipTests clean package && AUDIT_INGESTION_TOKEN=e2e-secret docker compose --profile app up --build -d
+# auditflow-platform: the whole platform in containers (jars first).
+# AUDIT_INGESTION_TOKENS is "tenant=token[,tenant=token]" - the tenant on the
+# left is the customerId ingestion will accept from that token, so this run
+# accepts events for "resistance" and nothing else. Leave the variable unset
+# and the endpoint is open to every customerId, which is the dev default.
+mvn -DskipTests clean package && AUDIT_INGESTION_TOKENS=resistance=e2e-secret docker compose --profile app up --build -d
 
 # Resistance: MySQL + the tracker, pointed at the platform
 docker compose -f infrastructure/docker-compose.yml up -d mysql
@@ -87,7 +93,7 @@ would collide with AuditFlow's 8080/8081):
 | Component | Port | How to start |
 |---|---|---|
 | Resistance MySQL | 3306 | `docker compose -f infrastructure/docker-compose.yml up -d mysql` (Resistance repo) |
-| AuditFlow (all of it) | 9092 / 5432 / 4566 + 8080–8084 | `mvn -DskipTests clean package && AUDIT_INGESTION_TOKEN=e2e-secret docker compose --profile app up --build -d` (auditflow-platform repo; the evidence bucket is created by an init hook). Or `docker compose up -d` for infrastructure only and `mvn -pl services/<name> spring-boot:run` per service with the same env var. |
+| AuditFlow (all of it) | 9092 / 5432 / 4566 + 8080–8084 | `mvn -DskipTests clean package && AUDIT_INGESTION_TOKENS=resistance=e2e-secret docker compose --profile app up --build -d` (auditflow-platform repo; the evidence bucket is created by an init hook). Or `docker compose up -d` for infrastructure only and `mvn -pl services/<name> spring-boot:run` per service with the same env var. |
 | AuditFlow api-gateway | 8080 | part of the profile above; auth open, `X-Customer-Id: resistance` on every call |
 | Resistance mvc-service | 8085 | `TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service -am spring-boot:run` |
 | Resistance intake-service | 8087 | same two env vars, `-pl services/intake-service` |
@@ -160,10 +166,19 @@ Every row's `user_id` is the acting account, never another user's.
 curl -si -X POST localhost:8081/api/v1/events -H 'Content-Type: application/json' \
   -d '{"eventId":"forged-1","customerId":"resistance","type":"AUTH_EVENT"}'                    # no token
 curl -si ... -H 'X-Audit-Token: wrong' -d '{...}'                                              # bad token
+curl -si ... -H 'X-Audit-Token: e2e-secret' \
+  -d '{"eventId":"forged-2","customerId":"other-corp","type":"AUTH_EVENT"}'   # right token, wrong tenant
 ```
-**Expect:** both 401, nothing in Kafka/Aurora; the same payload **with**
-`X-Audit-Token: e2e-secret` returns 202. **Fail if** any unauthenticated
-write lands — that would mean forgeable audit evidence.
+**Expect:** the first two 401 and the third **403**, with nothing in
+Kafka/Aurora for any of them; the same payload with `X-Audit-Token: e2e-secret`
+and `customerId: resistance` returns 202. **Fail if** any unauthenticated
+write lands — that would mean forgeable audit evidence — or if the
+cross-tenant write is accepted, which would let one customer's token file
+evidence under another customer's name.
+
+The 403 is the tenant binding: each `AUDIT_INGESTION_TOKENS` entry names the
+one `customerId` its token may write as, so a leaked token is contained to
+the tenant it was issued for.
 
 ### E2E-4 — Resilience: auditing down, product up
 
