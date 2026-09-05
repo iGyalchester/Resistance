@@ -23,10 +23,6 @@ module "email_intake" {
   hosted_zone_id = var.hosted_zone_id
   rule_set_name  = var.ses_rule_set_name
 
-  # The SNS subscription can only be confirmed by a running intake-service,
-  # so it exists only while the app does.
-  intake_endpoint_url = var.app_enabled ? "https://${var.app_host}/intake/aws-sns" : ""
-
   tags = local.tags
 }
 
