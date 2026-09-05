@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -61,6 +62,19 @@ class AuditEventClientTests {
             assertTrue(json.contains("\"action\":\"LOGIN_SUCCESS\""));
             assertTrue(json.contains("\"userId\":\"boris@gmail.com\""));
             assertTrue(json.contains("\"eventId\":\""));
+            // The source's clock, read on the calling thread before the
+            // async send. AuditFlow used to stamp arrival time instead, so
+            // a slow or retried delivery moved the event - a login failure
+            // at 09:59 could land in the 10:00 report window. ISO-8601,
+            // which is what Instant.toString() gives and what the
+            // ingestion side parses back.
+            assertTrue(json.contains("\"occurredAt\":\""),
+                    "expected an occurredAt field in " + json);
+            String occurredAt = json.replaceFirst(
+                    ".*\"occurredAt\":\"([^\"]+)\".*", "$1");
+            assertTrue(Math.abs(Duration.between(
+                            Instant.parse(occurredAt), Instant.now()).toSeconds()) < 30,
+                    "occurredAt should be about now, was " + occurredAt);
         } finally {
             server.stop(0);
         }
