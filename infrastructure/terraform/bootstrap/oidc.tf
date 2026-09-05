@@ -5,14 +5,53 @@
 
 data "aws_caller_identity" "current" {}
 
+# The OIDC provider is account-wide, not per-repo: its URL is the identity,
+# and AWS allows exactly one per account. Both this repo's bootstrap and the
+# other one used to create it unconditionally, so whichever was applied
+# second failed with EntityAlreadyExists - and the fix under time pressure
+# (delete it, re-apply) breaks CI for the repo that owned it.
+#
+# So one bootstrap creates it and the other reads it. The flag says which
+# this is. auditflow-infrastructure creates it; Resistance sets
+# create_oidc_provider = false. Either way local.oidc_provider_arn is the
+# same ARN, so the trust policies below do not care which.
+
 data "tls_certificate" "github_actions" {
+  count = var.create_oidc_provider ? 1 : 0
+
   url = "https://token.actions.githubusercontent.com/.well-known/openid-configuration"
 }
 
 resource "aws_iam_openid_connect_provider" "github_actions" {
+  count = var.create_oidc_provider ? 1 : 0
+
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.github_actions.certificates[0].sha1_fingerprint]
+  thumbprint_list = [data.tls_certificate.github_actions[0].certificates[0].sha1_fingerprint]
+}
+
+data "aws_iam_openid_connect_provider" "github_actions" {
+  count = var.create_oidc_provider ? 0 : 1
+
+  url = "https://token.actions.githubusercontent.com"
+}
+
+# An already-applied bootstrap has the provider at the un-indexed address.
+# Without this it would be destroyed and recreated, which breaks every
+# other role in the account that trusts it.
+moved {
+  from = aws_iam_openid_connect_provider.github_actions
+  to   = aws_iam_openid_connect_provider.github_actions[0]
+}
+
+locals {
+  # Exactly one of the two counts above is 1, so exactly one of these is a
+  # single-element list and the other is empty. one() gives null for the
+  # empty one and coalesce takes whichever is real.
+  oidc_provider_arn = coalesce(
+    one(aws_iam_openid_connect_provider.github_actions[*].arn),
+    one(data.aws_iam_openid_connect_provider.github_actions[*].arn),
+  )
 }
 
 locals {
@@ -47,7 +86,7 @@ data "aws_iam_policy_document" "github_actions_trust" {
 
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+      identifiers = [local.oidc_provider_arn]
     }
 
     condition {
