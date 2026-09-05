@@ -159,6 +159,18 @@ a secret token required in every state-changing POST - is on, and Thymeleaf
 injects the token into every `th:action` form automatically. That's also
 why deletes are POST forms instead of links: a GET that changes state can
 be triggered by a simple `<img>` tag.
+**Behind a load balancer:** on AWS the ALB terminates HTTPS and forwards
+plain HTTP from a VPC address, so by default the app would believe it is
+serving http and that the load balancer is the client. Three things go
+wrong: the redirect to `/login` sends the browser to `http://` (off the
+certificate), session and XSRF cookies never get the `Secure` flag, and
+`request.getRemoteAddr()` returns the ALB — which quietly collapses the
+per-IP OTP throttle into a single bucket every user in the world shares.
+`server.forward-headers-strategy=native` (qa profile) hands the
+`X-Forwarded-*` headers to Tomcat's `RemoteIpValve`. The valve only trusts
+those headers from an internal proxy address, so a caller cannot forge its
+own IP or scheme. `MvcServiceApplicationTests.ForwardedHeaders` proves the
+redirect comes back as `https://`.
 **Owner-scoping:** the multi-user boundary lives in the service layer -
 `JobApplicationServiceImpl` for applications, `ContactServiceImpl` for
 contacts. Every query and mutation takes the acting account's id, and
@@ -427,7 +439,7 @@ Used only in qa/production; dev needs none of this.
 | **Route53** | AWS's DNS service; a "hosted zone" is one domain's set of records | holds the MX record that sends `track@…` mail to SES, the SES verification/DKIM records, and later the app's hostname |
 | **ECR** (Elastic Container Registry) | a private Docker image store | the Deploy workflow pushes one image per service here; ECS pulls from it |
 | **ECS Fargate** | runs containers without servers to manage: you say "this image, this much CPU and memory, this many copies" and AWS finds room for it | one *service* each for mvc-service and intake-service; a *task* is one running copy |
-| **ALB** (Application Load Balancer) | the public front door: terminates HTTPS, checks each task's health, and routes by path | `/intake/*` goes to intake-service, everything else to mvc-service; login sessions stick to one task |
+| **ALB** (Application Load Balancer) | the public front door: terminates HTTPS, checks each task's health, and routes by path | `/intake/*` goes to intake-service, everything else to mvc-service; login sessions stick to one task. It speaks plain HTTP to the tasks, so both services run with `server.forward-headers-strategy=native` in `qa` — see "Behind a load balancer" below |
 | **ACM** (Certificate Manager) | free TLS certificates, renewed automatically | the ALB's certificate for `tracker.<domain>`, proven by a DNS record Terraform writes |
 | **RDS** (Relational Database Service) | managed MySQL: backups, patching, failover handled for you | the same MySQL 8 the local container runs; its master password is generated and rotated by RDS in Secrets Manager |
 | **SSM Parameter Store** / **Secrets Manager** | places to keep secrets encrypted, with an audit trail of who read them | the field-encryption key, the webhook token and the SMTP credentials (Parameter Store); the database password (Secrets Manager); ECS injects them as environment variables at start |
