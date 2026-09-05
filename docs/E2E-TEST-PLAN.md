@@ -34,7 +34,8 @@ large report windows, and the React UI (covered by its own Vitest suite).
 | Layer | Suite | Proves |
 |---|---|---|
 | Resistance unit | `AuditEventClientTests` | JSON escaping, token header, fire-and-forget never blocks/throws, disabled mode |
-| Resistance unit | `JobApplicationOwnershipTests`, `IntakeServiceTests` | emissions fire on CREATE/UPDATE/DELETE/provisioning — and **not** on refused foreign-owner operations |
+| Resistance unit | `JobApplicationOwnershipTests`, `ContactOwnershipTests`, `IntakeServiceTests` | emissions fire on CREATE/UPDATE/DELETE/provisioning — and **not** on refused foreign-owner operations; applications and contacts are both scoped to the acting account |
+| Resistance unit | `ContactControllerTests` | the owner id comes from the session only; another user's contact is a redirect, not a form |
 | AuditFlow unit | `IngestTokenFilterTest` | open/dev mode, constant-time match, 401 on wrong/missing token |
 | AuditFlow unit | `QueryRedactorTest`, `MySqlGeneralLogCollectorTest` | PII literals stripped, noise filtered, deterministic ids |
 | AuditFlow IT (CI) | `EventIngestionIntegrationTest` | HTTP → Kafka against a real broker |
@@ -139,6 +140,13 @@ different `customer_id`, Aurora and S3 disagree on count, or
    status, delete another, open `/profile`.
 2. `curl` the intake webhook (README's smoke-test payload) twice — second
    forward must be a no-op.
+3. Contact tenancy: as user A add a contact and note its id from the edit
+   link. Sign in as user B (forward from a second address to get an
+   account) and open `/contacts/list` — A's contact must not be listed.
+   Then `GET /contacts/showFormForUpdate?contactId=<A's id>` as B: expect a
+   redirect to `/contacts/list`, not A's data. Finally post an application
+   as B with `contact=<A's id>` in the form body: expect the save to be
+   refused rather than the application linking to A's recruiter.
 
 **Expect:** `DATABASE_QUERY/CREATE|UPDATE|DELETE` with
 `resource = job_application:<id>`, `FILE_ACCESS/PROFILE_VIEW`,

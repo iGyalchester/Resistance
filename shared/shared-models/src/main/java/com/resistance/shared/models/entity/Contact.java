@@ -21,6 +21,15 @@ public class Contact {
     @Column(name="email")
     private String email;
 
+    // the tracker user this contact belongs to. Contacts are per-user: two
+    // people who both hear from the same recruiter each get their own row,
+    // and neither can see the other's. Nullable so rows written before
+    // owners existed still load - the service layer treats an ownerless
+    // contact as invisible, the same rule JobApplication follows.
+    @ManyToOne
+    @JoinColumn(name="owner_account_id")
+    private UserAccount owner;
+
     // define constructors
     public Contact() {
 
@@ -30,6 +39,11 @@ public class Contact {
         this.firstName = firstName;
         this.lastName = lastName;
         this.email = email;
+    }
+
+    public Contact(String firstName, String lastName, String email, UserAccount owner) {
+        this(firstName, lastName, email);
+        this.owner = owner;
     }
 
     // define getters/setters
@@ -64,6 +78,14 @@ public class Contact {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public UserAccount getOwner() {
+        return owner;
+    }
+
+    public void setOwner(UserAccount owner) {
+        this.owner = owner;
     }
 
 

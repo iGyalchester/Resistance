@@ -171,13 +171,21 @@ per-IP OTP throttle into a single bucket every user in the world shares.
 those headers from an internal proxy address, so a caller cannot forge its
 own IP or scheme. `MvcServiceApplicationTests.ForwardedHeaders` proves the
 redirect comes back as `https://`.
-**Owner-scoping:** the multi-user boundary lives in
-`JobApplicationServiceImpl` - every query and mutation takes the acting
-account's id, and someone else's application is indistinguishable from a
-missing one. The tests in `JobApplicationOwnershipTests` demonstrate each
-denied path.
+**Owner-scoping:** the multi-user boundary lives in the service layer -
+`JobApplicationServiceImpl` for applications, `ContactServiceImpl` for
+contacts. Every query and mutation takes the acting account's id, and
+someone else's row is indistinguishable from a missing one. Contacts are a
+per-user address book rather than a shared directory: two users who hear
+from the same recruiter each get their own row, and intake matches on
+owner *and* email when it files a new one. One subtlety worth knowing: the
+application form's contact dropdown posts an id, and the converter that
+turns that id back into an entity has no request context, so it cannot
+check who is asking - `saveForOwner` refuses a contact belonging to another
+account instead. `JobApplicationOwnershipTests` and `ContactOwnershipTests`
+demonstrate each denied path.
 **Where:** `mvc-service/.../auth/SecurityConfig.java`,
-`auth/LoginController.java`, `service/JobApplicationServiceImpl.java`.
+`auth/LoginController.java`, `service/JobApplicationServiceImpl.java`,
+`service/ContactServiceImpl.java`.
 
 ### Passwordless OTP login
 
@@ -424,9 +432,9 @@ Used only in qa/production; dev needs none of this.
 
 | Service | One-sentence explanation | Role here |
 |---|---|---|
-| **SES** (Simple Email Service) | AWS's email send/receive service | *Receives* mail for `track@yourdomain.com` (via an MX DNS record) and can also *send* our OTP emails over SMTP |
-| **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES publishes each received email to a topic; the topic POSTs it to `/intake/aws-sns` |
-| **S3** | file storage | keeps the raw email (30-day expiry) |
+| **SES** (Simple Email Service) | AWS's email send/receive service | *Receives* mail for the whole domain (via an MX DNS record), which is what makes each user's `track+<alias>@` address work, and can also *send* our OTP emails over SMTP |
+| **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES publishes each received email to a topic and the topic POSTs it to `/intake/aws-sns`; this is the only action that carries the email *body*, so the parser depends on it |
+| **S3** | file storage | archives the raw email for 30 days, for debugging a parse that went wrong |
 | **KMS** (Key Management Service) | managed encryption keys | protects the data key used for field encryption (below) |
 | **Route53** | AWS's DNS service; a "hosted zone" is one domain's set of records | holds the MX record that sends `track@…` mail to SES, the SES verification/DKIM records, and later the app's hostname |
 | **ECR** (Elastic Container Registry) | a private Docker image store | the Deploy workflow pushes one image per service here; ECS pulls from it |

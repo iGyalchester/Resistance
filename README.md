@@ -32,7 +32,9 @@ query log (checkpointed, at-least-once). Details under
   `REJECTED`, `ACCEPTED`, `WITHDRAWN`), optionally linked to the Contact it
   came through (`contact_id`) and owned by the UserAccount that forwarded it
   (`owner_account_id`)
-- **Contact** - recruiters, referrals and hiring managers you talk to
+- **Contact** - recruiters, referrals and hiring managers you talk to, owned
+  by the UserAccount whose address book they are in (`owner_account_id`); the
+  same recruiter writing to two users produces two rows, one each
 - **UserAccount / LoginCode** - tracker users, auto-provisioned by email
   intake; passwordless login via hashed one-time codes
 - **Recruiter / RecruiterDetail / JobPosting / Note / Candidate** - the advanced
@@ -96,6 +98,14 @@ The quickest way to get one:
 docker compose -f infrastructure/docker-compose.yml up mysql
 ```
 
+The init scripts only run on an empty data directory, so if you already have
+a `resistance_mysql-data` volume from before a schema change, reset it first
+(this drops local data):
+
+```bash
+docker compose -f infrastructure/docker-compose.yml down -v
+```
+
 Then run any service, e.g.:
 
 ```bash
@@ -143,7 +153,7 @@ Three inbound paths feed the same flow - pick whichever fits:
 | Path | Use when | Setup |
 |---|---|---|
 | `POST /intake/email` JSON webhook | You use Mailgun/SendGrid/Postmark inbound parse, or want a curl smoke test | Set `intake.webhook-token`, point the provider at the endpoint |
-| `POST /intake/aws-sns` | You run on AWS | Terraform's `email-intake` module creates the SES→SNS chain and sets `intake.aws.topic-arn` (see `infrastructure/aws/README.md`) |
+| `POST /intake/aws-sns` | You run on AWS | Terraform's `email-intake` module creates the SES→SNS chain (the receipt rule publishes the message body to SNS and archives the raw MIME in S3) and sets `intake.aws.topic-arn` (see `infrastructure/aws/README.md`) |
 | IMAP polling | Any ordinary mailbox, e.g. Gmail + app password | `intake.imap.enabled=true` + host/username/password |
 
 Smoke test with curl:
@@ -254,10 +264,11 @@ balancer, which together cost about $50 a month while they run.
 What is actually in place today:
 
 - **Spring Security across mvc-service**: every page except the login flow
-  requires an authenticated session; application data is owner-scoped at
-  the service layer (another user's rows are indistinguishable from
-  missing ones); CSRF protection is on and deletes are POSTs; login
-  rotates the session id.
+  requires an authenticated session; applications *and* contacts are
+  owner-scoped at the service layer (another user's rows are
+  indistinguishable from missing ones, and a posted contact id belonging to
+  someone else is refused on save); CSRF protection is on and deletes are
+  POSTs; login rotates the session id.
 - **Passwordless OTP login**: codes stored as SHA-256 hashes only,
   10-minute expiry, 5 attempts, one active code per account, constant-time
   comparison, no account enumeration - and code requests are rate-limited

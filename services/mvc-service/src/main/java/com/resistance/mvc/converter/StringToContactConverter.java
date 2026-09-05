@@ -9,6 +9,12 @@ import org.springframework.stereotype.Component;
  * Lets form binding turn a posted contact id back into the Contact entity,
  * so the application form's dropdown can populate JobApplication.contact.
  * Spring Boot auto-registers Converter beans with web data binding.
+ *
+ * <p>A converter has no request context, so it cannot know who is asking and
+ * deliberately does not try: it resolves the id and nothing more.
+ * {@code JobApplicationServiceImpl.saveForOwner} is what refuses a contact
+ * belonging to another account, which is the same place every other
+ * cross-account check lives.
  */
 @Component
 public class StringToContactConverter implements Converter<String, Contact> {
