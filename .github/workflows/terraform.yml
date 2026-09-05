@@ -45,6 +45,8 @@ env:
   # set once from bootstrap/'s outputs - see infrastructure/terraform/README.md.
   AWS_REGION: ${{ vars.AWS_REGION }}
   AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  # Read-only, and the only role a pull-request workflow can assume.
+  AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
 
 jobs:
   fmt-and-validate:
@@ -82,22 +84,33 @@ jobs:
           working_directory: infrastructure/terraform
           soft_fail: true # advisory until its findings have been triaged
 
+  # Plans run as a read-only role. The deploy role holds write credentials
+  # for the whole account and its trust policy no longer accepts the
+  # `pull_request` subject, so a workflow a pull request triggers - including
+  # one whose own diff edits this file - cannot assume it.
+  #
+  # Note the missing `environment:` binding. A job bound to a GitHub
+  # Environment presents `environment:<name>` as its OIDC subject rather than
+  # `pull_request`, so binding it here would defeat the trust policy that
+  # makes this role safe.
   plan:
     name: plan (${{ matrix.environment }})
     runs-on: ubuntu-latest
     needs: [fmt-and-validate]
-    if: github.event_name == 'pull_request' && vars.AWS_ROLE_ARN != ''
+    if: github.event_name == 'pull_request' && vars.AWS_PLAN_ROLE_ARN != ''
     strategy:
       matrix:
         environment: [dev, prod]
-    environment: ${{ matrix.environment }}
     steps:
       - uses: actions/checkout@v6.0.2
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_PLAN_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Show which identity the plan is using
+        run: aws sts get-caller-identity
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -120,9 +133,12 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
         run: terraform init -backend-config=backend.hcl -input=false
 
+      # -lock=false because taking a state lock is a write, and this role
+      # cannot write. A stale read on a pull-request plan is harmless: the
+      # plan is advisory and apply re-plans under a real lock.
       - name: terraform plan
         working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
-        run: terraform plan -var-file=terraform.tfvars -input=false
+        run: terraform plan -var-file=terraform.tfvars -input=false -lock=false
 
   apply:
     name: apply (${{ matrix.environment }})

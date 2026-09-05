@@ -81,11 +81,23 @@ always-on set can stay applied indefinitely.
    |---|---|
    | `AWS_REGION` | `state_bucket_region` |
    | `AWS_ROLE_ARN` | `github_actions_role_arn` |
+   | `AWS_PLAN_ROLE_ARN` | `github_actions_plan_role_arn` |
    | `TF_STATE_BUCKET` | `state_bucket_name` |
 
+   Two roles, on purpose. `AWS_ROLE_ARN` can write to the account and is
+   assumable only from `main` and from an environment-bound job.
+   `AWS_PLAN_ROLE_ARN` is read-only and is the only one a pull-request
+   workflow can assume, because the deploy role's trust policy no longer
+   accepts the `pull_request` subject. Any workflow a PR triggers used to
+   hold write credentials - including a workflow whose own diff came from
+   that PR.
+
    Also create two GitHub Environments named `dev` and `prod` (Settings →
-   Environments); the workflow binds each apply job to one so the OIDC
-   token carries the environment name.
+   Environments); the workflow binds each **apply** job to one so the OIDC
+   token carries the environment name. The plan job is deliberately *not*
+   bound: an environment-bound job presents `environment:<name>` as its
+   subject instead of `pull_request`, which would defeat the plan role's
+   trust policy.
 4. **Fill in the tfvars.** In `environments/dev/terraform.tfvars` and
    `environments/prod/terraform.tfvars` replace `ZCHANGEME` with the
    `hosted_zone_id` output, the `permissions_boundary_arn` placeholder with
@@ -281,8 +293,18 @@ silently widening a principal. That is deliberate.
 
 ### The plan job is skipped on my pull request
 
-It skips itself while the `AWS_ROLE_ARN` repository variable is unset
-(step 3 above). Format, validate and tfsec still run.
+It skips itself while the `AWS_PLAN_ROLE_ARN` repository variable is unset
+(step 3 above). Format, validate and tfsec still run. If you set
+`AWS_ROLE_ARN` but not `AWS_PLAN_ROLE_ARN`, the plan job stays skipped by
+design rather than falling back to the write-capable role.
+
+### The plan job fails with `AccessDenied` on some read
+
+`ReadOnlyAccess` plus S3/KMS on the state bucket is what the plan role
+carries. A genuinely new read-only action means adding it to
+`github_actions_plan_extra` in `bootstrap/oidc.tf` and re-applying
+bootstrap by hand. Do not "fix" it by pointing the plan job back at
+`AWS_ROLE_ARN`.
 
 ### A service keeps restarting
 

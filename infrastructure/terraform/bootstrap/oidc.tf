@@ -67,14 +67,25 @@ locals {
   # - GitHub's immutable-reference format appends "@<numeric id>" to the
   #   owner and repo segments (repo:org@123/name@456:...), so each pattern
   #   needs a classic and an @-suffixed variant.
-  github_subjects = flatten([
+  # What the DEPLOY role trusts. Note what is absent: `pull_request`.
+  # Any workflow a pull request triggers used to be able to assume this
+  # role, which holds write credentials for the whole account - so a PR
+  # that edits a workflow file is a PR that can use them. Plans on pull
+  # requests now use the read-only role below instead.
+  deploy_subjects = flatten([
     for repo in var.github_repos : [
       "repo:${var.github_org}/${repo}:ref:refs/heads/main",
-      "repo:${var.github_org}/${repo}:pull_request",
       "repo:${var.github_org}/${repo}:environment:*",
       "repo:${var.github_org}@*/${repo}@*:ref:refs/heads/main",
-      "repo:${var.github_org}@*/${repo}@*:pull_request",
       "repo:${var.github_org}@*/${repo}@*:environment:*",
+    ]
+  ])
+
+  # What the PLAN role trusts, and only this.
+  plan_subjects = flatten([
+    for repo in var.github_repos : [
+      "repo:${var.github_org}/${repo}:pull_request",
+      "repo:${var.github_org}@*/${repo}@*:pull_request",
     ]
   ])
 }
@@ -98,7 +109,38 @@ data "aws_iam_policy_document" "github_actions_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = local.github_subjects
+      values   = local.deploy_subjects
+    }
+  }
+}
+
+# --- the read-only role pull-request plans use ------------------------------
+#
+# A plan needs to read state and describe resources; it needs nothing that
+# can change them. Separating it means a workflow triggered by a pull
+# request - including one whose diff edits that workflow - never holds
+# credentials that can write to the account.
+
+data "aws_iam_policy_document" "github_actions_plan_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [local.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = local.plan_subjects
     }
   }
 }
@@ -311,4 +353,45 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
   name   = "resistance-tracker-services"
   role   = aws_iam_role.github_actions_deploy.id
   policy = data.aws_iam_policy_document.github_actions_deploy.json
+}
+resource "aws_iam_role" "github_actions_plan" {
+  name               = "resistance-github-actions-plan"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_plan_trust.json
+}
+
+# ReadOnlyAccess covers describing every resource a plan refreshes.
+resource "aws_iam_role_policy_attachment" "github_actions_plan_readonly" {
+  role       = aws_iam_role.github_actions_plan.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+# Two things ReadOnlyAccess does not cover, both needed to read state.
+data "aws_iam_policy_document" "github_actions_plan_extra" {
+  statement {
+    sid    = "ReadStateObjects"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket",
+    ]
+    resources = [
+      "arn:aws:s3:::${var.state_bucket_name}",
+      "arn:aws:s3:::${var.state_bucket_name}/*",
+    ]
+  }
+
+  # The state bucket is encrypted, so reading an object needs Decrypt. This
+  # is read-only: no GenerateDataKey, which is what writing would need.
+  statement {
+    sid       = "DecryptState"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_plan_extra" {
+  name   = "resistance-github-actions-plan-read-state"
+  role   = aws_iam_role.github_actions_plan.id
+  policy = data.aws_iam_policy_document.github_actions_plan_extra.json
 }
