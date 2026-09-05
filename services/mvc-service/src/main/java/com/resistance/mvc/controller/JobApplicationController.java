@@ -3,7 +3,7 @@ package com.resistance.mvc.controller;
 import java.util.List;
 
 import com.resistance.mvc.auth.LoginController;
-import com.resistance.mvc.dao.ContactRepository;
+import com.resistance.mvc.service.ContactService;
 import com.resistance.mvc.service.JobApplicationService;
 
 import jakarta.servlet.http.HttpSession;
@@ -26,12 +26,12 @@ public class JobApplicationController {
 
 	private JobApplicationService applicationService;
 
-	private ContactRepository contactRepository;
+	private ContactService contactService;
 
 	public JobApplicationController(JobApplicationService theJobApplicationService,
-									ContactRepository theContactRepository) {
+									ContactService theContactService) {
 		applicationService = theJobApplicationService;
-		contactRepository = theContactRepository;
+		contactService = theContactService;
 	}
 
 	private int accountId(HttpSession session) {
@@ -44,10 +44,12 @@ public class JobApplicationController {
 		return ApplicationStatus.values();
 	}
 
-	// expose the contacts to the form's dropdown, fresh from the db each request
+	// expose the contacts to the form's dropdown, fresh from the db each
+	// request - only the signed-in user's, so the dropdown cannot even name
+	// somebody else's recruiter
 	@ModelAttribute("contacts")
-	public List<Contact> contacts() {
-		return contactRepository.findAll();
+	public List<Contact> contacts(HttpSession session) {
+		return contactService.findAllForOwner(accountId(session));
 	}
 
 	@GetMapping("/list")

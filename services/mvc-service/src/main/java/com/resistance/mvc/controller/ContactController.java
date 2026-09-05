@@ -1,29 +1,37 @@
 package com.resistance.mvc.controller;
 
-import com.resistance.mvc.dao.ContactRepository;
+import com.resistance.mvc.auth.LoginController;
+import com.resistance.mvc.service.ContactService;
 import com.resistance.shared.models.entity.Contact;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
+/**
+ * Owner-scoped contact CRUD: every operation runs as the logged-in account
+ * (Spring Security guarantees one exists here), and the service layer
+ * refuses cross-account access. Same shape as
+ * {@link JobApplicationController} on purpose.
+ */
 @Controller
 @RequestMapping("/contacts")
 public class ContactController {
 
-	private ContactRepository contactRepository;
+	private ContactService contactService;
 
-	public ContactController(ContactRepository theContactRepository) {
-		contactRepository = theContactRepository;
+	public ContactController(ContactService theContactService) {
+		contactService = theContactService;
+	}
+
+	private int accountId(HttpSession session) {
+		return (Integer) session.getAttribute(LoginController.SESSION_ACCOUNT_ID);
 	}
 
 	@GetMapping("/list")
-	public String listContacts(Model theModel) {
+	public String listContacts(HttpSession session, Model theModel) {
 
-		List<Contact> theContacts = contactRepository.findAll();
-
-		theModel.addAttribute("contacts", theContacts);
+		theModel.addAttribute("contacts", contactService.findAllForOwner(accountId(session)));
 
 		return "contacts/list-contacts";
 	}
@@ -38,10 +46,14 @@ public class ContactController {
 
 	@GetMapping("/showFormForUpdate")
 	public String showFormForUpdate(@RequestParam("contactId") int theId,
-									Model theModel) {
+									HttpSession session, Model theModel) {
 
-		Contact theContact = contactRepository.findById(theId)
-				.orElseThrow(() -> new RuntimeException("Contact id not found - " + theId));
+		Contact theContact = contactService.findByIdForOwner(theId, accountId(session))
+				.orElse(null);
+		if (theContact == null) {
+			// not yours (or gone) - back to your list, no information leaked
+			return "redirect:/contacts/list";
+		}
 
 		theModel.addAttribute("contact", theContact);
 
@@ -49,17 +61,18 @@ public class ContactController {
 	}
 
 	@PostMapping("/save")
-	public String saveContact(@ModelAttribute("contact") Contact theContact) {
+	public String saveContact(@ModelAttribute("contact") Contact theContact,
+							  HttpSession session) {
 
-		contactRepository.save(theContact);
+		contactService.saveForOwner(theContact, accountId(session));
 
 		return "redirect:/contacts/list";
 	}
 
 	@PostMapping("/delete")
-	public String delete(@RequestParam("contactId") int theId) {
+	public String delete(@RequestParam("contactId") int theId, HttpSession session) {
 
-		contactRepository.deleteById(theId);
+		contactService.deleteByIdForOwner(theId, accountId(session));
 
 		return "redirect:/contacts/list";
 	}

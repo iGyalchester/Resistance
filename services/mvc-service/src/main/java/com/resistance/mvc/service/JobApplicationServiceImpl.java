@@ -10,6 +10,7 @@ import com.resistance.mvc.dao.JobApplicationRepository;
 import com.resistance.mvc.dao.StatusHistoryRepository;
 import com.resistance.mvc.dao.UserAccountRepository;
 import com.resistance.shared.models.entity.ApplicationStatus;
+import com.resistance.shared.models.entity.Contact;
 import com.resistance.shared.models.entity.JobApplication;
 import com.resistance.shared.models.entity.StatusHistory;
 import com.resistance.shared.models.entity.UserAccount;
@@ -50,6 +51,17 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 
 	@Override
 	public void saveForOwner(JobApplication theJobApplication, int ownerId) {
+
+		// The form posts a contact id and StringToContactConverter resolves it
+		// with no request context, so a hand-edited dropdown value could
+		// otherwise attach another user's contact to your application. This is
+		// where that is refused.
+		Contact contact = theJobApplication.getContact();
+		if (contact != null
+				&& (contact.getOwner() == null || contact.getOwner().getId() != ownerId)) {
+			throw new IllegalArgumentException(
+					"Contact " + contact.getId() + " does not belong to account " + ownerId);
+		}
 
 		ApplicationStatus previousStatus = null;
 		boolean isNew = theJobApplication.getId() == 0;
