@@ -506,11 +506,27 @@ The trust policy names `local.oidc_provider_arn` either way, so nothing
 downstream cares.
 
 CI never holds an AWS key. GitHub issues each workflow run a short-lived
-signed token (**OIDC**, the same idea as "log in with Google"), and the
-bootstrap role is configured to trust tokens that name *this* repository
-on `main`, a pull request, or a named environment. AWS swaps that token for
-temporary credentials that expire with the job. There is nothing to leak
-and nothing to rotate.
+signed token (**OIDC**, the same idea as "log in with Google"), and a
+bootstrap role is configured to trust tokens that name *this* repository.
+AWS swaps that token for temporary credentials that expire with the job.
+There is nothing to leak and nothing to rotate.
+
+**Why there are two roles.** `resistance-github-actions-deploy` can write
+to the account, and it trusts only `main` and environment-bound jobs.
+`resistance-github-actions-plan` is read-only, and it is the only role that
+trusts the `pull_request` subject. The split matters because a pull request
+can change the workflow file it runs: with one role, opening a PR that edits
+`.github/workflows/` was enough to run arbitrary steps holding write
+credentials for the whole account. A plan needs to read state and describe
+resources and nothing more, so that is all the role it runs under can do.
+
+One subtlety worth knowing if you ever edit that workflow: the plan job is
+deliberately **not** bound to a GitHub Environment. A job that is bound
+presents `environment:<name>` as its OIDC subject rather than
+`pull_request`, so adding an `environment:` line would quietly stop the
+plan role's trust policy matching — and the fix that looks obvious
+(point the job back at the deploy role) is exactly the thing this split
+exists to prevent.
 
 **Why the CI role has a permissions boundary.** Terraform has to create IAM
 principals - the ECS execution role that pulls images and reads secrets, and
