@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        root: [bootstrap, environments/dev, environments/prod]
+        root: [bootstrap, stack]
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -106,7 +106,7 @@ jobs:
       - name: Write backend config
         # backend.hcl is gitignored (account-specific) - generated here from
         # the TF_STATE_BUCKET repository variable set after bootstrap/.
-        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
+        working-directory: ${{ env.TF_ROOT }}/stack
         run: |
           cat > backend.hcl <<EOT
           bucket       = "${{ vars.TF_STATE_BUCKET }}"
@@ -117,12 +117,17 @@ jobs:
           EOT
 
       - name: terraform init
-        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
-        run: terraform init -backend-config=backend.hcl -input=false
+        working-directory: ${{ env.TF_ROOT }}/stack
+        # -reconfigure because one directory serves every environment;
+        # without it Terraform offers to migrate the previous state key.
+        run: terraform init -backend-config=backend.hcl -input=false -reconfigure
 
       - name: terraform plan
-        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
-        run: terraform plan -var-file=terraform.tfvars -input=false
+        working-directory: ${{ env.TF_ROOT }}/stack
+        run: |
+          terraform plan -input=false \
+            -var-file=../environments/${{ matrix.environment }}.tfvars \
+            -var environment=${{ matrix.environment }}
 
   apply:
     name: apply (${{ matrix.environment }})
@@ -152,7 +157,7 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Write backend config
-        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
+        working-directory: ${{ env.TF_ROOT }}/stack
         run: |
           cat > backend.hcl <<EOT
           bucket       = "${{ vars.TF_STATE_BUCKET }}"
@@ -163,21 +168,26 @@ jobs:
           EOT
 
       - name: terraform init
-        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
-        run: terraform init -backend-config=backend.hcl -input=false
+        working-directory: ${{ env.TF_ROOT }}/stack
+        # -reconfigure because one directory serves every environment;
+        # without it Terraform offers to migrate the previous state key.
+        run: terraform init -backend-config=backend.hcl -input=false -reconfigure
 
       # Plan to a file and apply that exact file, so what is applied is what
       # the guard below inspected - not a second, later plan.
       - name: terraform plan
-        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
-        run: terraform plan -out=tfplan -var-file=terraform.tfvars -input=false
+        working-directory: ${{ env.TF_ROOT }}/stack
+        run: |
+          terraform plan -out=tfplan -input=false \
+            -var-file=../environments/${{ matrix.environment }}.tfvars \
+            -var environment=${{ matrix.environment }}
 
       # A Deploy run must move the image and nothing else. Without this, an
       # unrelated change sitting on main would ride along with the next image
       # deploy - a database replacement, say, that nobody was watching for.
       - name: Refuse anything but a service rollout
         if: inputs.rollout_only
-        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
+        working-directory: ${{ env.TF_ROOT }}/stack
         run: |
           set -euo pipefail
           changed=$(terraform show -json tfplan | jq -r '
@@ -216,5 +226,5 @@ jobs:
           fi
 
       - name: terraform apply
-        working-directory: ${{ env.TF_ROOT }}/environments/${{ matrix.environment }}
+        working-directory: ${{ env.TF_ROOT }}/stack
         run: terraform apply -input=false -auto-approve tfplan

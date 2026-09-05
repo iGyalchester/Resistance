@@ -496,8 +496,12 @@ difference. The comparison needs a memory of what it created last time:
 the **state** file. It lives in an S3 bucket so a laptop and a CI runner
 see the same memory, and a lockfile stops two applies from racing. A
 **module** is a folder of `.tf` files you call like a function
-(`module "ecr" { source = "../../modules/ecr" ... }`); `environments/dev`
-and `environments/prod` call the same modules with different inputs.
+(`module "ecr" { source = "../modules/ecr" ... }`). There is one root,
+`stack/`, applied once per environment with a different
+`environments/<env>.tfvars` and a different state key. dev and prod used to
+be separate directories that differed by a single literal, with a full copy
+of the variable declarations each - so a new knob had to be added in three
+places and could silently disagree between two of them.
 
 The chicken-and-egg problem: the state bucket cannot be created by a
 configuration whose state lives in that bucket. So `bootstrap/` is a small
@@ -601,7 +605,7 @@ history and were caught exactly there.
 | How a page gets its data | `controller/JobApplicationController.java` + matching template |
 | What a table looks like | the `@Entity` class **and** its `CREATE TABLE` in `db-init/02-job-tracker.sql` |
 | Why qa won't start | `application-qa.properties` (placeholders with no defaults) |
-| What AWS resources exist, and what they cost | `infrastructure/terraform/environments/dev/main.tf`, then the modules it calls; cost table in `infrastructure/terraform/README.md` |
+| What AWS resources exist, and what they cost | `infrastructure/terraform/stack/main.tf`, then the modules it calls; cost table in `infrastructure/terraform/README.md` |
 | Why one thing is applied by hand and the rest from CI | `infrastructure/terraform/bootstrap/` (read the comments at the top of each file) |
 | Where `DB_PASSWORD` and the other secrets come from on AWS | `modules/secrets/main.tf`, then the `secrets` list in `modules/app/main.tf` |
 | Why there is no NAT gateway, and what that costs | the comment at the top of `modules/network/main.tf` |

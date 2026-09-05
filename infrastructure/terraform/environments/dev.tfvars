@@ -1,3 +1,7 @@
+# Applied against ../stack with -var-file. The environment itself is
+# passed separately (-var environment=dev), because it also picks the
+# state key and CI needs it before reading this file.
+
 aws_region = "us-east-1"
 
 # From bootstrap/ outputs. Replace the placeholders before the first apply.
