@@ -449,6 +449,25 @@ on `main`, a pull request, or a named environment. AWS swaps that token for
 temporary credentials that expire with the job. There is nothing to leak
 and nothing to rotate.
 
+**Why the CI role has a permissions boundary.** Terraform has to create IAM
+principals - the ECS execution role that pulls images and reads secrets, and
+the SES SMTP user. So the CI role needs `iam:CreateRole` and
+`iam:PutRolePolicy`, and that pair is an escalation ladder: IAM lets you
+write a policy onto a role you created that is *broader than your own*, then
+pass or assume it. Naming the roles it may touch does not close that, because
+the danger is the policy content, not the target.
+
+A **permissions boundary** does close it. It is a policy attached to a
+principal that says "whatever else is granted, never more than this" - the
+principal ends up with the intersection. `bootstrap/oidc.tf` creates one
+(`resistance-ci-boundary`) listing what those two principals genuinely need:
+pull an image, write logs, read the injected secrets, send mail. The CI
+role may then create a role or write a policy *only when the target carries
+that boundary* (an `iam:PermissionsBoundary` condition), may only pass a role
+to `ecs-tasks.amazonaws.com`, and is explicitly denied the two calls that
+would take a boundary back off. The worst a compromised pull request can now
+reach for is a role that can read this app's own secrets - not an admin.
+
 ### Why SNS messages are signature-verified
 
 Anyone who discovers our `/intake/aws-sns` URL can POST JSON to it, and

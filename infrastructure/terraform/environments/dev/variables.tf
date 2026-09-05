@@ -15,6 +15,11 @@ variable "ses_rule_set_name" {
   default     = "resistance"
 }
 
+variable "permissions_boundary_arn" {
+  description = "From `terraform output ci_boundary_policy_arn` in bootstrap/. Every IAM principal this environment creates carries it, and the CI role may not create one without it."
+  type        = string
+}
+
 variable "mail_domain" {
   description = "Domain this environment receives mail for (users forward to track@<mail_domain>)."
   type        = string

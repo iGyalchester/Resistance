@@ -7,8 +7,9 @@ Terraform, ECS or OIDC are new words.
 
 ```
 bootstrap/          applied ONCE by hand with your own credentials: the state bucket,
-                    the CI role, and the two account-level things AWS allows only one
-                    of (the Route53 hosted zone, the active SES receipt rule set)
+                    the CI role and the permissions boundary that caps every IAM
+                    principal CI creates, and the two account-level things AWS allows
+                    only one of (the Route53 hosted zone, the active SES receipt rule set)
 modules/
   ecr/              one image repository per deployed service
   email-intake/     SES receiving for one mail domain: verification, DKIM, MX,
@@ -74,7 +75,11 @@ always-on set can stay applied indefinitely.
    token carries the environment name.
 4. **Fill in the tfvars.** In `environments/dev/terraform.tfvars` and
    `environments/prod/terraform.tfvars` replace `ZCHANGEME` with the
-   `hosted_zone_id` output and `example.com` with your domain. Commit.
+   `hosted_zone_id` output, the `permissions_boundary_arn` placeholder with
+   the `ci_boundary_policy_arn` output, and `example.com` with your domain.
+   Commit. The boundary is not optional: the CI role is only allowed to
+   create IAM principals that carry it, so an apply with the placeholder
+   still in place fails on `iam:CreateRole`.
 5. **Merge to `main`.** The Terraform workflow applies `dev`: ECR
    repositories, SES verification and DKIM records, the MX record for
    `dev.<domain>`, the raw-mail bucket, the SNS topic and the receipt rule.
@@ -190,6 +195,27 @@ terraform apply -var="state_bucket_name=<bucket>" -var="domain_name=<domain>"
 Then re-run the failed workflow. `oidc.tf` lists every service the
 environments use today, so this should only happen after a new module
 brings a new service.
+
+### `AccessDenied` on `iam:CreateRole` or `iam:PutRolePolicy`
+
+The CI role may only create IAM principals that carry the permissions
+boundary `bootstrap/` publishes (`resistance-ci-boundary`), and only under
+the names `resistance-*`. Two causes:
+
+- **`permissions_boundary_arn` is still the placeholder** in the
+  environment's `terraform.tfvars`. Apply `bootstrap/`, then copy
+  `terraform output ci_boundary_policy_arn` into both tfvars files.
+- **A new module creates an IAM principal without setting
+  `permissions_boundary`.** Add it, threading the variable through the
+  environment like `modules/app` and `modules/secrets` do. If the principal
+  needs a permission the boundary does not list, widen the boundary in
+  `bootstrap/oidc.tf` and re-apply bootstrap - the boundary is a ceiling, so
+  a permission missing there is invisible in the principal's own policy and
+  shows up only as a runtime `AccessDenied`.
+
+Note that `iam:DeleteRolePermissionsBoundary` is explicitly denied, so
+removing `permissions_boundary` from a module fails the apply rather than
+silently widening a principal. That is deliberate.
 
 ### The plan job is skipped on my pull request
 
