@@ -1,8 +1,9 @@
 aws_region = "us-east-1"
 
 # From bootstrap/ outputs. Replace the placeholders before the first apply.
-hosted_zone_id    = "ZCHANGEME"
-ses_rule_set_name = "resistance"
+hosted_zone_id           = "ZCHANGEME"
+ses_rule_set_name        = "resistance"
+permissions_boundary_arn = "arn:aws:iam::CHANGEME:policy/resistance-ci-boundary"
 
 # prod owns the apex: users forward to track@<domain>, app at tracker.<domain>.
 mail_domain = "example.com"

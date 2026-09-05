@@ -18,6 +18,11 @@ variable "kms_deletion_window_days" {
   default     = 7
 }
 
+variable "permissions_boundary_arn" {
+  description = "Permissions boundary (bootstrap's ci_boundary_policy_arn) that every IAM principal created here must carry. The CI role is not allowed to create one without it, so this is required, not optional."
+  type        = string
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

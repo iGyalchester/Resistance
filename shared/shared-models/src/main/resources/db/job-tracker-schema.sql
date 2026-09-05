@@ -36,7 +36,11 @@ CREATE TABLE IF NOT EXISTS `contact` (
   `first_name` varchar(45) DEFAULT NULL,
   `last_name` varchar(45) DEFAULT NULL,
   `email` varchar(45) DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  `owner_account_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FK_CONTACT_OWNER_idx` (`owner_account_id`),
+  CONSTRAINT `FK_CONTACT_OWNER` FOREIGN KEY (`owner_account_id`)
+  REFERENCES `user_account` (`id`) ON DELETE SET NULL ON UPDATE NO ACTION
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
 CREATE TABLE IF NOT EXISTS `job_application` (

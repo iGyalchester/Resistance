@@ -1,5 +1,6 @@
 package com.resistance.mvc;
 
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,6 +34,38 @@ class MvcServiceApplicationTests {
 
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(response.body()).contains("\"status\"");
+	}
+
+	/**
+	 * What the qa profile turns on. The ALB terminates TLS and forwards
+	 * plain HTTP, so without forward-headers-strategy every redirect to
+	 * /login would send the browser to http:// - off the certificate and,
+	 * on a HSTS domain, into an error page. Nested so the local build's
+	 * "!MvcServiceApplicationTests" exclusion still covers it: like its
+	 * parent it needs a real MySQL and runs in CI.
+	 */
+	@Nested
+	@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+			properties = "server.forward-headers-strategy=native")
+	class ForwardedHeaders {
+
+		@Value("${local.server.port}")
+		private int forwardedPort;
+
+		@Test
+		void redirectsHonourForwardedProto() throws Exception {
+			HttpResponse<Void> response = HttpClient.newBuilder()
+					.followRedirects(HttpClient.Redirect.NEVER).build()
+					.send(HttpRequest.newBuilder(
+									URI.create("http://localhost:" + forwardedPort + "/dashboard"))
+							.header("X-Forwarded-Proto", "https")
+							.GET().build(),
+							HttpResponse.BodyHandlers.discarding());
+
+			assertThat(response.statusCode()).isEqualTo(302);
+			assertThat(response.headers().firstValue("Location").orElseThrow())
+					.startsWith("https://");
+		}
 	}
 
 }

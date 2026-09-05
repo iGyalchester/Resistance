@@ -145,7 +145,7 @@ public class IntakeService {
                 notifyQuietly(account, application, previous);
                 changed = true;
             }
-            if (linkContact(application, parsed)) {
+            if (linkContact(application, parsed, account)) {
                 changed = true;
             }
             if (changed) {
@@ -160,7 +160,7 @@ public class IntakeService {
             application = new JobApplication(parsed.companyName(), parsed.positionTitle(),
                     parsed.status() == null ? ApplicationStatus.APPLIED : parsed.status());
             application.setOwner(account);
-            linkContact(application, parsed);
+            linkContact(application, parsed, account);
             application = applicationRepository.save(application);
             historyRepository.save(new StatusHistory(application, null,
                     application.getStatus(), clock.instant(), StatusHistory.SOURCE_INTAKE));
@@ -216,22 +216,30 @@ public class IntakeService {
 
     /**
      * Attaches the parsed recruiter as the application's contact (creating
-     * the Contact row once, matched by email). Never overwrites an existing
-     * link. Returns whether the application changed.
+     * the Contact row once, matched by owner + email). Never overwrites an
+     * existing link. Returns whether the application changed.
+     *
+     * <p>The match is scoped to the account: a recruiter who writes to two
+     * tracker users produces two contact rows, one per address book, so
+     * neither user can see or edit the other's copy.
      */
-    private boolean linkContact(JobApplication application, ParsedApplication parsed) {
+    private boolean linkContact(JobApplication application, ParsedApplication parsed,
+                                UserAccount account) {
         if (!parsed.hasContact() || application.getContact() != null) {
             return false;
         }
 
-        Contact contact = contactRepository.findByEmailIgnoreCase(parsed.contactEmail())
+        Contact contact = contactRepository
+                .findByOwnerIdAndEmailIgnoreCase(account.getId(), parsed.contactEmail())
                 .orElseGet(() -> {
                     String name = parsed.contactName() == null ? "" : parsed.contactName().trim();
                     int split = name.indexOf(' ');
                     String firstName = split < 0 ? name : name.substring(0, split);
                     String lastName = split < 0 ? "" : name.substring(split + 1);
-                    log.info("Creating contact {} <{}>", name, parsed.contactEmail());
-                    return contactRepository.save(new Contact(firstName, lastName, parsed.contactEmail()));
+                    log.info("Creating contact {} <{}> for {}", name, parsed.contactEmail(),
+                            account.getEmail());
+                    return contactRepository.save(
+                            new Contact(firstName, lastName, parsed.contactEmail(), account));
                 });
 
         application.setContact(contact);

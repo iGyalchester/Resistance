@@ -11,7 +11,7 @@ user forwards email
       │
       ▼
 SES receiving (MX record → inbound-smtp.<region>.amazonaws.com)
-      │  receipt rule: store raw MIME in S3 + notify SNS
+      │  receipt rule: archive the raw MIME in S3, publish the message to SNS
       ▼
 SNS topic ──HTTPS subscription──> POST https://<app host>/intake/aws-sns
                                         │ (SnsIntakeController confirms the
@@ -24,6 +24,16 @@ SNS topic ──HTTPS subscription──> POST https://<app host>/intake/aws-sns
 - SES allows exactly one *active* receipt rule set per account and region.
   That is why the rule set is created in `bootstrap/` and each environment
   only adds a rule for its own recipient.
+- The rule has **two** actions and they do different jobs. The `s3_action`
+  archives the raw MIME so a bad parse can be investigated later. The
+  `sns_action` is the one intake-service reads, because SES includes the
+  message itself - base64 MIME in the notification's `content` field - only
+  for an SNS action. An S3 action that merely notifies a topic sends
+  metadata and no body, and the parser then has nothing to work with.
+- The SNS action refuses a message larger than 150 KB and SES bounces it.
+  A bounce is visible to whoever forwarded the mail, which is the point;
+  reading the archived S3 object instead would lift the ceiling to SES's own
+  40 MB limit and is the planned follow-up.
 - intake-service verifies every SNS message's signature against the AWS
   signing certificate (`intake.aws.verify-signature=true` in `qa`), so a
   forged POST to the endpoint is rejected even if the URL leaks.
@@ -35,8 +45,13 @@ SNS topic ──HTTPS subscription──> POST https://<app host>/intake/aws-sns
 
 Account routing is based on the recipient address, not the sender: each
 account gets a random alias and its personal address `track+<alias>@domain`.
-SES receipt rules match the bare recipient (`track@domain`) and deliver
-plus-tagged variants to the same rule, so no extra AWS setup is needed.
+The receipt rule's recipient condition is the **whole mail domain**, not one
+address. SES matches a plus-tagged address only when that exact address is
+listed, so a rule scoped to `track@domain` would never see the personal
+`track+<alias>@domain` addresses the dashboard hands out; a domain condition
+catches every one of them. Mail sent to any other address at the domain (a
+reply to the OTP sender, say) reaches intake too and is dropped for carrying
+no alias.
 In `qa`, `intake.require-alias=true` (mail to the bare address provisions
 nothing) and `INTAKE_ADDRESS=track@<domain>` is injected into mvc-service so
 dashboards render each user's personal address.

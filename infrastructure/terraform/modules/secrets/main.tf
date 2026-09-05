@@ -86,8 +86,9 @@ resource "aws_ssm_parameter" "webhook_token" {
 # ever sees.
 
 resource "aws_iam_user" "ses_smtp" {
-  name = "${var.name}-ses-smtp"
-  tags = var.tags
+  name                 = "${var.name}-ses-smtp"
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
 }
 
 data "aws_iam_policy_document" "ses_smtp" {

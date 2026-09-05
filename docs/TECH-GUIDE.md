@@ -159,13 +159,33 @@ a secret token required in every state-changing POST - is on, and Thymeleaf
 injects the token into every `th:action` form automatically. That's also
 why deletes are POST forms instead of links: a GET that changes state can
 be triggered by a simple `<img>` tag.
-**Owner-scoping:** the multi-user boundary lives in
-`JobApplicationServiceImpl` - every query and mutation takes the acting
-account's id, and someone else's application is indistinguishable from a
-missing one. The tests in `JobApplicationOwnershipTests` demonstrate each
-denied path.
+**Behind a load balancer:** on AWS the ALB terminates HTTPS and forwards
+plain HTTP from a VPC address, so by default the app would believe it is
+serving http and that the load balancer is the client. Three things go
+wrong: the redirect to `/login` sends the browser to `http://` (off the
+certificate), session and XSRF cookies never get the `Secure` flag, and
+`request.getRemoteAddr()` returns the ALB — which quietly collapses the
+per-IP OTP throttle into a single bucket every user in the world shares.
+`server.forward-headers-strategy=native` (qa profile) hands the
+`X-Forwarded-*` headers to Tomcat's `RemoteIpValve`. The valve only trusts
+those headers from an internal proxy address, so a caller cannot forge its
+own IP or scheme. `MvcServiceApplicationTests.ForwardedHeaders` proves the
+redirect comes back as `https://`.
+**Owner-scoping:** the multi-user boundary lives in the service layer -
+`JobApplicationServiceImpl` for applications, `ContactServiceImpl` for
+contacts. Every query and mutation takes the acting account's id, and
+someone else's row is indistinguishable from a missing one. Contacts are a
+per-user address book rather than a shared directory: two users who hear
+from the same recruiter each get their own row, and intake matches on
+owner *and* email when it files a new one. One subtlety worth knowing: the
+application form's contact dropdown posts an id, and the converter that
+turns that id back into an entity has no request context, so it cannot
+check who is asking - `saveForOwner` refuses a contact belonging to another
+account instead. `JobApplicationOwnershipTests` and `ContactOwnershipTests`
+demonstrate each denied path.
 **Where:** `mvc-service/.../auth/SecurityConfig.java`,
-`auth/LoginController.java`, `service/JobApplicationServiceImpl.java`.
+`auth/LoginController.java`, `service/JobApplicationServiceImpl.java`,
+`service/ContactServiceImpl.java`.
 
 ### Passwordless OTP login
 
@@ -412,14 +432,14 @@ Used only in qa/production; dev needs none of this.
 
 | Service | One-sentence explanation | Role here |
 |---|---|---|
-| **SES** (Simple Email Service) | AWS's email send/receive service | *Receives* mail for `track@yourdomain.com` (via an MX DNS record) and can also *send* our OTP emails over SMTP |
-| **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES publishes each received email to a topic; the topic POSTs it to `/intake/aws-sns` |
-| **S3** | file storage | keeps the raw email (30-day expiry) |
+| **SES** (Simple Email Service) | AWS's email send/receive service | *Receives* mail for the whole domain (via an MX DNS record), which is what makes each user's `track+<alias>@` address work, and can also *send* our OTP emails over SMTP |
+| **SNS** (Simple Notification Service) | publish/subscribe messaging — a "topic" pushes messages to subscribers | SES publishes each received email to a topic and the topic POSTs it to `/intake/aws-sns`; this is the only action that carries the email *body*, so the parser depends on it |
+| **S3** | file storage | archives the raw email for 30 days, for debugging a parse that went wrong |
 | **KMS** (Key Management Service) | managed encryption keys | protects the data key used for field encryption (below) |
 | **Route53** | AWS's DNS service; a "hosted zone" is one domain's set of records | holds the MX record that sends `track@…` mail to SES, the SES verification/DKIM records, and later the app's hostname |
 | **ECR** (Elastic Container Registry) | a private Docker image store | the Deploy workflow pushes one image per service here; ECS pulls from it |
 | **ECS Fargate** | runs containers without servers to manage: you say "this image, this much CPU and memory, this many copies" and AWS finds room for it | one *service* each for mvc-service and intake-service; a *task* is one running copy |
-| **ALB** (Application Load Balancer) | the public front door: terminates HTTPS, checks each task's health, and routes by path | `/intake/*` goes to intake-service, everything else to mvc-service; login sessions stick to one task |
+| **ALB** (Application Load Balancer) | the public front door: terminates HTTPS, checks each task's health, and routes by path | `/intake/*` goes to intake-service, everything else to mvc-service; login sessions stick to one task. It speaks plain HTTP to the tasks, so both services run with `server.forward-headers-strategy=native` in `qa` — see "Behind a load balancer" below |
 | **ACM** (Certificate Manager) | free TLS certificates, renewed automatically | the ALB's certificate for `tracker.<domain>`, proven by a DNS record Terraform writes |
 | **RDS** (Relational Database Service) | managed MySQL: backups, patching, failover handled for you | the same MySQL 8 the local container runs; its master password is generated and rotated by RDS in Secrets Manager |
 | **SSM Parameter Store** / **Secrets Manager** | places to keep secrets encrypted, with an audit trail of who read them | the field-encryption key, the webhook token and the SMTP credentials (Parameter Store); the database password (Secrets Manager); ECS injects them as environment variables at start |
@@ -448,6 +468,25 @@ bootstrap role is configured to trust tokens that name *this* repository
 on `main`, a pull request, or a named environment. AWS swaps that token for
 temporary credentials that expire with the job. There is nothing to leak
 and nothing to rotate.
+
+**Why the CI role has a permissions boundary.** Terraform has to create IAM
+principals - the ECS execution role that pulls images and reads secrets, and
+the SES SMTP user. So the CI role needs `iam:CreateRole` and
+`iam:PutRolePolicy`, and that pair is an escalation ladder: IAM lets you
+write a policy onto a role you created that is *broader than your own*, then
+pass or assume it. Naming the roles it may touch does not close that, because
+the danger is the policy content, not the target.
+
+A **permissions boundary** does close it. It is a policy attached to a
+principal that says "whatever else is granted, never more than this" - the
+principal ends up with the intersection. `bootstrap/oidc.tf` creates one
+(`resistance-ci-boundary`) listing what those two principals genuinely need:
+pull an image, write logs, read the injected secrets, send mail. The CI
+role may then create a role or write a policy *only when the target carries
+that boundary* (an `iam:PermissionsBoundary` condition), may only pass a role
+to `ecs-tasks.amazonaws.com`, and is explicitly denied the two calls that
+would take a boundary back off. The worst a compromised pull request can now
+reach for is a role that can read this app's own secrets - not an admin.
 
 ### Why SNS messages are signature-verified
 
