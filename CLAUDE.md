@@ -53,8 +53,6 @@ technology in the stack, kept current by convention (see below).
   SES→SNS (signature-verified), or IMAP; heuristic parsing with optional
   Claude fallback; the recipient **alias is the trust anchor**, never the
   From header.
-- `services/rest-api-service` (8083) — deliberately **unsecured legacy
-  demo**; never expose it publicly.
 - `infrastructure/` — docker-compose, Kubernetes, `terraform/` (AWS by
   code: `bootstrap/` once by hand, modules, `dev` + `prod` environments,
   cost gated on `app_enabled`; the Deploy workflow pushes images), and

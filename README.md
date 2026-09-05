@@ -47,7 +47,6 @@ Resistance/
 ├── services/
 │   ├── core-service/              Spring Core: DI, qualifiers, scopes, Java config (port 8081)
 │   ├── data-service/              JPA/Hibernate CRUD command-line demo (Contact)
-│   ├── rest-api-service/          REST CRUD API for tracked job applications (port 8083)
 │   ├── security-service/          REST API + JDBC users/roles/bcrypt security (port 8084)
 │   ├── mvc-service/               Spring MVC + Thymeleaf application CRUD & forms (port 8085)
 │   ├── mvc-security-service/      MVC form login, roles, custom tables (port 8086)
@@ -85,7 +84,7 @@ Requires JDK 26 and Maven 3.9+ (Spring Boot 4.1).
 
 ```bash
 mvn clean package          # everything
-mvn -pl services/rest-api-service -am package   # one service + its dependencies
+mvn -pl services/mvc-service -am package       # one service + its dependencies
 ```
 
 ## Running locally
@@ -109,7 +108,7 @@ docker compose -f infrastructure/docker-compose.yml down -v
 Then run any service, e.g.:
 
 ```bash
-mvn -pl services/rest-api-service -am spring-boot:run
+mvn -pl services/security-service -am spring-boot:run
 ```
 
 `DB_HOST`/`DB_PORT` environment variables override the default
@@ -121,7 +120,7 @@ Full stack (MySQL, four web services, gateway):
 docker compose -f infrastructure/docker-compose.yml up --build
 ```
 
-The gateway then serves e.g. `http://localhost:8080/rest-api/api/applications`.
+The gateway then serves e.g. `http://localhost:8080/security/api/applications`.
 
 ## Email intake & passwordless login
 
@@ -309,11 +308,9 @@ What is actually in place today:
   `main` (require the Build check) in the repo settings - that part can't
   live in the codebase.
 
-Remaining known gaps: `rest-api-service` (port 8083) is the *unsecured
-legacy demo* of the REST API - its secured twin is `security-service` -
-so never expose 8083 publicly; TLS terminates at the ALB/gateway, not
-in-app; dev DB credentials sit in property files (qa takes everything
-from the environment).
+Remaining known gaps: TLS terminates at the ALB/gateway, not in-app; dev
+DB credentials sit in property files (qa takes everything from the
+environment).
 
 ## Audit trail (AuditFlow integration)
 
