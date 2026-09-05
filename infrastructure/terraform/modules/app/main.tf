@@ -180,9 +180,10 @@ data "aws_iam_policy_document" "task_assume" {
 }
 
 resource "aws_iam_role" "execution" {
-  name               = "${var.name}-ecs-execution"
-  assume_role_policy = data.aws_iam_policy_document.task_assume.json
-  tags               = var.tags
+  name                 = "${var.name}-ecs-execution"
+  assume_role_policy   = data.aws_iam_policy_document.task_assume.json
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "execution_managed" {

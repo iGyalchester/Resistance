@@ -23,6 +23,11 @@ output "hosted_zone_name_servers" {
   value       = local.name_servers
 }
 
+output "ci_boundary_policy_arn" {
+  description = "Put in each environment's terraform.tfvars as permissions_boundary_arn; CI cannot create an IAM principal without it."
+  value       = aws_iam_policy.ci_boundary.arn
+}
+
 output "ses_rule_set_name" {
   description = "Put in each environment's terraform.tfvars as ses_rule_set_name."
   value       = aws_ses_receipt_rule_set.this.rule_set_name

@@ -54,6 +54,7 @@ module "secrets" {
   environment              = local.environment
   mail_domain              = var.mail_domain
   kms_deletion_window_days = var.kms_deletion_window_days
+  permissions_boundary_arn = var.permissions_boundary_arn
   tags                     = local.tags
 }
 
@@ -104,6 +105,8 @@ module "app" {
   otp_from_address = "${var.otp_local_part}@${var.mail_domain}"
   intake_address   = module.email_intake.intake_address
   intake_topic_arn = module.email_intake.topic_arn
+
+  permissions_boundary_arn = var.permissions_boundary_arn
 
   audit_url                    = var.audit_url
   audit_token_secret_arn       = var.audit_token_secret_arn
