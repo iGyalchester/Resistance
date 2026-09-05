@@ -1,3 +1,13 @@
+variable "environment" {
+  description = "Which environment this root is applied as. Chooses the state key, the resource name prefix and the tfvars file; dev and prod share one account and one domain."
+  type        = string
+
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "environment must be dev or prod."
+  }
+}
+
 variable "aws_region" {
   description = "Must match bootstrap's region (SES receiving is regional)."
   type        = string

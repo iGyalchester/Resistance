@@ -1,23 +1,29 @@
+# One root for every environment. dev and prod were byte-identical apart
+# from this literal, and each carried its own copy of 127 lines of variable
+# declarations - so every new knob had to be added in three places and could
+# silently disagree between two of them.
+#
+# State keys are unchanged (<env>/terraform.tfstate), so this is a layout
+# change and not a state migration.
 locals {
-  environment = "dev"
-  name        = "resistance-${local.environment}"
+  name = "resistance-${var.environment}"
   tags = {
-    Environment = local.environment
+    Environment = var.environment
   }
 }
 
 # Always on (free): the image registry and the mail routing.
 
 module "ecr" {
-  source = "../../modules/ecr"
+  source = "../modules/ecr"
 
   name        = local.name
-  environment = local.environment
+  environment = var.environment
   tags        = local.tags
 }
 
 module "email_intake" {
-  source = "../../modules/email-intake"
+  source = "../modules/email-intake"
 
   name           = local.name
   mail_domain    = var.mail_domain
@@ -33,7 +39,7 @@ module "email_intake" {
 # task would crash-loop on image pull while the ALB and RDS bill by the hour.
 
 module "network" {
-  source = "../../modules/network"
+  source = "../modules/network"
   count  = var.app_enabled ? 1 : 0
 
   name          = local.name
@@ -44,11 +50,11 @@ module "network" {
 }
 
 module "secrets" {
-  source = "../../modules/secrets"
+  source = "../modules/secrets"
   count  = var.app_enabled ? 1 : 0
 
   name                     = local.name
-  environment              = local.environment
+  environment              = var.environment
   mail_domain              = var.mail_domain
   kms_deletion_window_days = var.kms_deletion_window_days
   permissions_boundary_arn = var.permissions_boundary_arn
@@ -56,7 +62,7 @@ module "secrets" {
 }
 
 module "database" {
-  source = "../../modules/database"
+  source = "../modules/database"
   count  = var.app_enabled ? 1 : 0
 
   name                  = local.name
@@ -72,7 +78,7 @@ module "database" {
 }
 
 module "app" {
-  source = "../../modules/app"
+  source = "../modules/app"
   count  = var.app_enabled ? 1 : 0
 
   name                    = local.name
