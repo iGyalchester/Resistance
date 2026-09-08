@@ -117,6 +117,7 @@ module "app" {
   permissions_boundary_arn = var.permissions_boundary_arn
 
   audit_url                    = var.audit_url
+  admin_emails                 = var.admin_emails
   audit_token_secret_arn       = var.audit_token_secret_arn
   anthropic_api_key_secret_arn = var.anthropic_api_key_secret_arn
 

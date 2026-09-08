@@ -111,6 +111,7 @@ task definitions.
 | `INTAKE_ADDRESS` | `track@<mail domain>` | mvc |
 | `TRACKER_AUDIT_URL`, `TRACKER_AUDIT_TOKEN` *(optional)* | AuditFlow ingestion; token from Secrets Manager | intake, mvc |
 | `ANTHROPIC_API_KEY` *(optional)* | Secrets Manager; Claude-backed email parsing and the in-app assistant | intake, mvc |
+| `TRACKER_ADMIN_EMAILS` *(optional)* | `admin_emails` in the tfvars, joined with commas; these accounts get the ADMIN role | mvc |
 
 Dev needs none of this: no profile flag (dev is the default), local MySQL
 from docker-compose, logged OTP codes, open webhook, plaintext PII.

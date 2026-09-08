@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { UnauthorizedError } from '../api/client';
+import { ApiError, UnauthorizedError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
 interface AsyncState<T> {
   data: T | null;
   error: string | null;
+  /** HTTP status of a failed request, when the server answered at all (403 matters to the admin page). */
+  status: number | null;
   loading: boolean;
 }
 
@@ -15,7 +17,7 @@ interface AsyncState<T> {
  * other failure becomes a message the page can show.
  */
 export function useAsync<T>(load: () => Promise<T>, deps: unknown[] = []) {
-  const [state, setState] = useState<AsyncState<T>>({ data: null, error: null, loading: true });
+  const [state, setState] = useState<AsyncState<T>>({ data: null, error: null, status: null, loading: true });
   const [tick, setTick] = useState(0);
   const { setMe } = useAuth();
 
@@ -23,13 +25,18 @@ export function useAsync<T>(load: () => Promise<T>, deps: unknown[] = []) {
     let alive = true;
     setState((s) => ({ ...s, loading: true, error: null }));
     load()
-      .then((data) => alive && setState({ data, error: null, loading: false }))
+      .then((data) => alive && setState({ data, error: null, status: null, loading: false }))
       .catch((e) => {
         if (!alive) return;
         if (e instanceof UnauthorizedError) {
           setMe(null);
         } else {
-          setState({ data: null, error: 'Could not load this page. Refresh to try again.', loading: false });
+          setState({
+            data: null,
+            error: 'Could not load this page. Refresh to try again.',
+            status: e instanceof ApiError ? e.status : null,
+            loading: false,
+          });
         }
       });
     return () => {

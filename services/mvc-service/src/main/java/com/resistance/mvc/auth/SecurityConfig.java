@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -43,6 +44,8 @@ public class SecurityConfig {
                         // the load balancer's health check; reports only UP/DOWN
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/api/auth/code", "/api/auth/login", "/api/help").permitAll()
+                        // the ops view: signed in is not enough, the account must be on the admin list
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
         );
 
@@ -55,7 +58,18 @@ public class SecurityConfig {
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write("{\"error\":\"unauthenticated\"}");
         };
+        // a signed-in user without the role: JSON for the API, plain 403 elsewhere
+        AccessDeniedHandler api403 = (request, response, exception) -> {
+            if (request.getRequestURI().startsWith("/api/")) {
+                response.setStatus(403);
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.getWriter().write("{\"error\":\"forbidden\"}");
+            } else {
+                response.sendError(403);
+            }
+        };
         http.exceptionHandling(handling -> handling
+                .accessDeniedHandler(api403)
                 .defaultAuthenticationEntryPointFor(api401,
                         PathPatternRequestMatcher.withDefaults().matcher("/api/**"))
                 .defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login"),

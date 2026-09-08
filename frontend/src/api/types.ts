@@ -161,3 +161,33 @@ export interface FaqEntry {
   question: string;
   answer: string;
 }
+
+// --- admin ------------------------------------------------------------------
+
+export interface DayCount {
+  /** ISO date (yyyy-mm-dd), UTC */
+  day: string;
+  count: number;
+}
+
+export interface AdminOverview {
+  accounts: number;
+  applications: number;
+  applicationsByStatus: Record<string, number>;
+  intakeEventsLast30Days: DayCount[];
+  manualEventsLast30Days: DayCount[];
+  unparsedTitleShare?: number | null;
+  assistant: { messages: number; inputTokens: number; outputTokens: number; refusals: number; errors: number; throttled: number };
+  auth: { otpRequested: number; otpThrottled: number; loginSuccess: number; loginFailure: number };
+  /** ISO instant the process's counters started from zero */
+  countersSince: string;
+}
+
+export interface AdminAccount {
+  id: number;
+  email: string;
+  fullName?: string | null;
+  applicationCount: number;
+  lastActivity?: string | null;
+  hasAlias: boolean;
+}

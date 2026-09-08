@@ -46,7 +46,7 @@ class AuthApiControllerTests {
         // real authenticator + repository: the login test should prove the
         // session actually ends up authenticated, not that a mock was called
         SessionAuthenticator authenticator =
-                new SessionAuthenticator(new HttpSessionSecurityContextRepository());
+                new SessionAuthenticator(new HttpSessionSecurityContextRepository(), new com.resistance.mvc.auth.AdminRoles(""));
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller(authenticator, "")).build();
 
@@ -58,7 +58,8 @@ class AuthApiControllerTests {
     private AuthApiController controller(SessionAuthenticator authenticator, String assistantKey) {
         return new AuthApiController(otpService, authenticator,
                 emailThrottle, ipThrottle, accounts, "track@resistance.example",
-                com.resistance.shared.utils.audit.AuditEventClient.disabled(), assistantKey);
+                com.resistance.shared.utils.audit.AuditEventClient.disabled(), assistantKey,
+                new com.resistance.mvc.auth.AuthMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @Test
@@ -133,7 +134,7 @@ class AuthApiControllerTests {
     void meReportsTheAssistantFeatureWhenAKeyIsConfigured() throws Exception {
         when(accounts.findById(7)).thenReturn(Optional.of(boris));
         MockMvc withKey = MockMvcBuilders.standaloneSetup(
-                controller(new SessionAuthenticator(new HttpSessionSecurityContextRepository()), "sk-test"))
+                controller(new SessionAuthenticator(new HttpSessionSecurityContextRepository(), new com.resistance.mvc.auth.AdminRoles("")), "sk-test"))
                 .build();
 
         withKey.perform(get("/api/auth/me").sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))

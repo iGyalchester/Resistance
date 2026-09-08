@@ -3,7 +3,16 @@ import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import App from '../App';
 import { AuthProvider } from '../auth/AuthContext';
-import type { AnalyticsView, ApplicationDetailView, ApplicationView, ContactView, Me, ProfileView } from '../api/types';
+import type {
+  AdminAccount,
+  AdminOverview,
+  AnalyticsView,
+  ApplicationDetailView,
+  ApplicationView,
+  ContactView,
+  Me,
+  ProfileView,
+} from '../api/types';
 
 export const BORIS: Me = {
   fullName: 'Boris Gerard',
@@ -157,3 +166,26 @@ export function sseResponse(chunks: string[], status = 200): Response {
   });
   return new Response(stream, { status, headers: { 'Content-Type': 'text/event-stream' } });
 }
+
+export const ADMIN_OVERVIEW: AdminOverview = {
+  accounts: 3,
+  applications: 12,
+  applicationsByStatus: { APPLIED: 5, SCREENING: 2, INTERVIEW: 3, OFFER: 1, ACCEPTED: 0, REJECTED: 1, WITHDRAWN: 0 },
+  intakeEventsLast30Days: Array.from({ length: 30 }, (_, i) => ({
+    day: new Date(Date.UTC(2026, 7, 10 + i)).toISOString().slice(0, 10),
+    count: i === 29 ? 4 : 0,
+  })),
+  manualEventsLast30Days: Array.from({ length: 30 }, (_, i) => ({
+    day: new Date(Date.UTC(2026, 7, 10 + i)).toISOString().slice(0, 10),
+    count: i === 29 ? 1 : 0,
+  })),
+  unparsedTitleShare: 0.25,
+  assistant: { messages: 40, inputTokens: 1_000_000, outputTokens: 100_000, refusals: 1, errors: 2, throttled: 3 },
+  auth: { otpRequested: 9, otpThrottled: 1, loginSuccess: 5, loginFailure: 2 },
+  countersSince: '2026-09-08T06:00:00Z',
+};
+
+export const ADMIN_ACCOUNTS: AdminAccount[] = [
+  { id: 1, email: 'boris@gmail.com', fullName: 'Boris Gerard', applicationCount: 5, lastActivity: '2026-09-05T10:00:00Z', hasAlias: true },
+  { id: 2, email: 'quiet@example.com', fullName: null, applicationCount: 0, lastActivity: null, hasAlias: false },
+];

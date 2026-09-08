@@ -111,6 +111,12 @@ variable "intake_topic_arn" {
   type = string
 }
 
+variable "admin_emails" {
+  description = "Accounts (by email, case-insensitive) that get the ADMIN role at login and can open the ops view. Empty = no admins."
+  type        = list(string)
+  default     = []
+}
+
 variable "audit_url" {
   description = "AuditFlow ingestion URL (TRACKER_AUDIT_URL). Empty = auditing off."
   type        = string

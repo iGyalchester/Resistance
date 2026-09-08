@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAuth } from './auth/AuthContext';
 import AppShell from './components/AppShell';
 import ApplicationDetailPage from './pages/ApplicationDetailPage';
+import AdminPage from './pages/AdminPage';
 import ApplicationsPage from './pages/ApplicationsPage';
 import AssistantPage from './pages/AssistantPage';
 import ContactsPage from './pages/ContactsPage';
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/contacts" element={<ContactsPage />} />
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/help" element={<HelpPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -36,13 +36,16 @@ public class LoginController {
     private final OtpRequestThrottle emailThrottle;
     private final OtpRequestThrottle ipThrottle;
     private final AuditEventClient audit;
+    private final AuthMetrics metrics;
 
     public LoginController(OtpService otpService,
                            SessionAuthenticator sessionAuthenticator,
                            OtpRequestThrottle emailOtpThrottle,
                            OtpRequestThrottle ipOtpThrottle,
-                           AuditEventClient auditEventClient) {
+                           AuditEventClient auditEventClient,
+                           AuthMetrics authMetrics) {
         this.otpService = otpService;
+        this.metrics = authMetrics;
         this.sessionAuthenticator = sessionAuthenticator;
         this.emailThrottle = emailOtpThrottle;
         this.ipThrottle = ipOtpThrottle;
@@ -62,9 +65,11 @@ public class LoginController {
         // ones - no signal for enumeration or probing
         boolean allowed = emailThrottle.tryAcquire("email:" + email.trim().toLowerCase())
                 && ipThrottle.tryAcquire("ip:" + request.getRemoteAddr());
+        metrics.otpRequested();
         if (allowed) {
             otpService.requestCode(email);
         } else {
+            metrics.otpThrottled();
             log.warn("OTP request throttled for {}", request.getRemoteAddr());
         }
 
@@ -96,6 +101,7 @@ public class LoginController {
 
         Optional<UserAccount> account = otpService.verify(email, code);
         if (account.isEmpty()) {
+            metrics.loginFailure();
             audit.emit("AUTH_EVENT", "LOGIN_FAILURE", email.toLowerCase(),
                     "login", request.getRemoteAddr());
             model.addAttribute("email", email);
@@ -105,6 +111,7 @@ public class LoginController {
 
         session.removeAttribute(SESSION_LOGIN_EMAIL);
         sessionAuthenticator.establish(account.get(), request, response);
+        metrics.loginSuccess();
         audit.emit("AUTH_EVENT", "LOGIN_SUCCESS", account.get().getEmail(),
                 "login", request.getRemoteAddr());
 

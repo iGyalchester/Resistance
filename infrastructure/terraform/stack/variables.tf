@@ -118,6 +118,12 @@ variable "desired_count" {
   default = 1
 }
 
+variable "admin_emails" {
+  description = "Emails that get the ADMIN role in the tracker (the ops view). Empty = no admins."
+  type        = list(string)
+  default     = []
+}
+
 variable "audit_url" {
   description = "AuditFlow ingestion-service URL. Empty = audit events are not emitted."
   type        = string

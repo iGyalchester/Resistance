@@ -45,6 +45,8 @@ services:
       TRACKER_AUDIT_TOKEN: ${TRACKER_AUDIT_TOKEN:-}
       # optional in-app assistant (blank = feature hidden)
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # comma-separated emails that get the Admin page (blank = nobody)
+      TRACKER_ADMIN_EMAILS: ${TRACKER_ADMIN_EMAILS:-}
     ports:
       - "8085:8085"
     depends_on:
