@@ -131,7 +131,7 @@ variable "audit_token_secret_arn" {
 }
 
 variable "anthropic_api_key_secret_arn" {
-  description = "Secrets Manager secret holding the Anthropic API key. Empty = heuristic parsing only."
+  description = "Secrets Manager secret holding the Anthropic API key (email parsing fallback + in-app assistant). Empty = both off."
   type        = string
   default     = ""
 }

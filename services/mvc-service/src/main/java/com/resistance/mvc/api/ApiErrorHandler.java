@@ -1,5 +1,6 @@
 package com.resistance.mvc.api;
 
+import com.resistance.mvc.assistant.AssistantDisabledException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -43,6 +44,17 @@ public class ApiErrorHandler {
         // the services throw IllegalArgumentException for "not yours"; a
         // foreign row and a missing row must look identical from outside
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "not_found"));
+    }
+
+    @ExceptionHandler(UnauthenticatedException.class)
+    public ResponseEntity<Map<String, Object>> unauthenticated(UnauthenticatedException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "unauthenticated"));
+    }
+
+    @ExceptionHandler(AssistantDisabledException.class)
+    public ResponseEntity<Map<String, Object>> assistantDisabled(AssistantDisabledException e) {
+        // no API key configured: the feature is off, not broken
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", "assistant_disabled"));
     }
 
     @ExceptionHandler(Exception.class)

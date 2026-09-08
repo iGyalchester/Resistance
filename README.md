@@ -227,12 +227,24 @@ CI builds and tests the frontend in its own job.
 | `GET/POST/PUT/DELETE /api/contacts[/{id}]` | Your address book, with how many applications reference each contact |
 | `GET /api/profile`, `PUT /api/profile` | Name and phone (email is identity, read-only) |
 | `GET /api/analytics/summary` | The dashboard's numbers, computed server-side from your applications and status history |
+| `POST /api/assistant/messages` | Ask the assistant; answers as a server-sent event stream (`delta`, `action`, `done` / `error`) |
+| `DELETE /api/assistant/conversation` | Forget the chat history kept on your session |
+| `GET /api/help` | The Help page's questions and answers (public) |
 
 Errors have one shape: `{"error":"<code>"}`, plus a `fields` map naming each
 invalid field on `validation`. A row that is not yours is a `404 not_found`,
 exactly like one that does not exist, so ids cannot be probed. `GET
 /api/auth/me` also reports `roles` and `features` (which optional parts of
 the app this deployment has switched on).
+
+**The assistant.** With `ANTHROPIC_API_KEY` set on mvc-service the app
+gains a chat that answers from *your* applications and the FAQ, and
+suggests changes ("Withdraw Acme?") as cards you confirm; the model never
+writes to the database itself. It is off, and hidden, without the key.
+Knobs live under `tracker.ai.*` (model `claude-opus-5`, effort, 30 messages
+per hour per account, history caps). The design - grounding, prompt-injection
+posture, why proposals instead of writes - is explained in
+[docs/TECH-GUIDE.md](docs/TECH-GUIDE.md#the-assistant-streaming-chat-grounded-in-your-own-data).
 
 Auth is the session cookie itself — no tokens. CSRF tokens ride in the
 readable `XSRF-TOKEN` cookie and come back as an `X-XSRF-TOKEN` header;

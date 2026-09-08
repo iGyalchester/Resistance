@@ -46,7 +46,9 @@ technology in the stack, kept current by convention (see below).
 
 - `services/mvc-service` (8085) — the real app: Thymeleaf pages **and**
   the `/api/**` JSON API for React; OTP auth, session security,
-  owner-scoping at the service layer, CSRF (cookie repo for the SPA).
+  owner-scoping at the service layer, CSRF (cookie repo for the SPA);
+  `assistant/` is the Claude-backed chat (SSE, grounded prompt, proposals
+  that never write; on only when `ANTHROPIC_API_KEY` is set).
 - `frontend/` — Vite + React 19 + TypeScript SPA (login + dashboard so
   far); dev server proxies `/api` to 8085.
 - `services/intake-service` (8087) — email intake via webhook, AWS

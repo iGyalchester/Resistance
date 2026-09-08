@@ -1,0 +1,72 @@
+[
+  {
+    "id": "what-is-this",
+    "question": "What does Resistance do?",
+    "answer": "It tracks your job applications for you. Forward the \"we received your application\" email a company sends you to your personal intake address, and the application appears on your dashboard with its status. Later emails about the same application (an interview invite, a rejection) update the status automatically."
+  },
+  {
+    "id": "intake-address",
+    "question": "What is my intake address and where do I find it?",
+    "answer": "It is shown on your dashboard and looks like track+<your alias>@<domain>. The part after the plus sign is your personal alias: it is how the tracker knows an email belongs to you. Forward emails to that exact address. Mail sent to the bare track@ address without an alias is ignored."
+  },
+  {
+    "id": "forwarding",
+    "question": "How do I forward an email so it gets tracked?",
+    "answer": "Use your mail client's Forward action and send the message to your intake address. The tracker reads the forwarded content, works out the company, the position if it can, and the status. Within about a minute the application shows up on the Applications page. If you already tracked that company, the existing application is updated instead of duplicated."
+  },
+  {
+    "id": "statuses",
+    "question": "What do the statuses mean?",
+    "answer": "Applied: they received it. Screening: a recruiter screen or assessment is in progress. Interview: you are interviewing. Offer: an offer is on the table. Accepted: you took it. Rejected: they said no. Withdrawn: you stopped pursuing it. Applied, Screening, Interview and Offer count as active; the other three are finished."
+  },
+  {
+    "id": "ignored-email",
+    "question": "I forwarded an email and nothing appeared. Why?",
+    "answer": "The usual reasons: the email went to the bare track@ address instead of your personal track+alias@ address; the message was not recognisable as being about a job application (a newsletter, a calendar invite); or it was forwarded from an address that is not the one you log in with. Check the intake address on your dashboard and try again, or add the application by hand on the Applications page."
+  },
+  {
+    "id": "manual",
+    "question": "Can I add or edit applications myself?",
+    "answer": "Yes. The Applications page has an Add button and every row has a status dropdown; the detail page lets you edit any field or delete the application. Manual changes appear in the timeline marked \"by you\", email-driven ones \"from email\"."
+  },
+  {
+    "id": "login",
+    "question": "How do I log in? I never set a password.",
+    "answer": "There is no password. Enter your email, and a six-digit code is sent to it; enter the code and you are in. Codes expire after ten minutes and allow five attempts. Your account was created the first time you forwarded an email, so log in with the same address you forwarded from."
+  },
+  {
+    "id": "code-not-arriving",
+    "question": "My login code is not arriving.",
+    "answer": "Check spam, then request a new code from the login page. Only a few codes can be requested per address in a short window, so wait a few minutes if you have tried several times. Requesting a new code retires the old one."
+  },
+  {
+    "id": "dashboard-numbers",
+    "question": "What do the dashboard numbers mean?",
+    "answer": "Active is how many applications are still in play. Response rate is the share of applications that ever moved past Applied. Offers is the share that ever reached an offer. First response is the median number of days between sending an application and hearing anything back. The Needs attention list shows applications that have been waiting for two weeks or more with no change."
+  },
+  {
+    "id": "contacts",
+    "question": "Where do contacts come from?",
+    "answer": "When a forwarded email was written by an identifiable person (a recruiter, not a no-reply system), the tracker records them as a contact and links them to the application. You can also add and edit contacts yourself. Your contacts are yours alone; nobody else can see them."
+  },
+  {
+    "id": "assistant",
+    "question": "What can the assistant do?",
+    "answer": "It can answer questions about your own applications, contacts and history (which ones have gone quiet, how your pipeline looks, what changed this week), explain how the tracker works, and suggest changes. It never changes anything by itself: when it proposes a status change or a new application, a card appears that you confirm or dismiss."
+  },
+  {
+    "id": "assistant-privacy",
+    "question": "What does the assistant see?",
+    "answer": "Only the signed-in account's applications, contacts and status history, plus these help answers. It cannot see other users, your phone number, or anything outside the tracker. Each question is sent to the AI provider with that context; nothing is stored there beyond the request."
+  },
+  {
+    "id": "privacy",
+    "question": "Who can see my data?",
+    "answer": "Only you. Every page and every API call is scoped to the signed-in account; another user's application looks exactly like one that does not exist. Your phone number, if you add one, is encrypted before it is stored."
+  },
+  {
+    "id": "delete",
+    "question": "How do I delete an application or a contact?",
+    "answer": "Open the application's detail page and choose Delete; its timeline goes with it. On the Contacts page each row has a Delete action; applications that referenced the contact keep their row and just lose the link. Both ask for confirmation first."
+  }
+]

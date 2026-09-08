@@ -124,7 +124,7 @@ variable "audit_token_secret_arn" {
 }
 
 variable "anthropic_api_key_secret_arn" {
-  description = "Secrets Manager secret (plain string) holding the Anthropic API key for Claude-backed parsing. Empty = heuristics only."
+  description = "Secrets Manager secret (plain string) holding the Anthropic API key, used by intake-service (Claude-backed parsing) and mvc-service (the assistant). Empty = both off."
   type        = string
   default     = ""
 }

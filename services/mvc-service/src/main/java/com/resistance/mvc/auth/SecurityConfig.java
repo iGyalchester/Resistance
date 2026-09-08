@@ -42,7 +42,7 @@ public class SecurityConfig {
                         .requestMatchers("/login", "/login/**", "/logout", "/css/**", "/error").permitAll()
                         // the load balancer's health check; reports only UP/DOWN
                         .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers("/api/auth/code", "/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/code", "/api/auth/login", "/api/help").permitAll()
                         .anyRequest().authenticated()
         );
 
