@@ -65,9 +65,10 @@ technology in the stack, kept current by convention (see below).
 
 ## Roadmap
 
-React slices remaining: application/contact CRUD → status-history
-timeline view → profile page + shipping the built app in docker-compose,
-then decide on retiring Thymeleaf.
+React front end v2 is planned in **`docs/plans/FRONTEND-V2.md`** (seven
+slices: full JSON API, all pages, analytics dashboard, AI assistant with
+proposals + FAQ, admin role and ops view, then serving the SPA from
+mvc-service and retiring Thymeleaf). Work it in order, one PR per slice.
 
 **Built since this list was written**: CD via GitHub OIDC→ECS is done
 (`infrastructure/terraform` + the Deploy workflow, which pushes
