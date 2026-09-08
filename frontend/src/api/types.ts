@@ -86,3 +86,45 @@ export interface ProfileRequest {
   fullName: string;
   phone: string | null;
 }
+
+// --- analytics ---------------------------------------------------------
+
+export interface WeekBucket {
+  /** Monday of the ISO week, yyyy-mm-dd */
+  weekStart: string;
+  created: number;
+}
+
+export interface StaleApplication {
+  id: number;
+  companyName: string;
+  positionTitle?: string | null;
+  status: string;
+  contactId?: number | null;
+  daysSinceChange: number;
+}
+
+export interface Activity {
+  applicationId: number;
+  companyName: string;
+  fromStatus?: string | null;
+  toStatus: string;
+  changedAt: string;
+  source: string;
+}
+
+export interface AnalyticsView {
+  total: number;
+  active: number;
+  /** every status, enum order, zeros included */
+  countsByStatus: Record<string, number>;
+  /** 0..1, or null with no applications */
+  responseRate?: number | null;
+  offerRate?: number | null;
+  medianDaysToFirstResponse?: number | null;
+  /** only stages somebody has completed */
+  medianDaysInStage: Record<string, number>;
+  weeklyApplications: WeekBucket[];
+  stale: StaleApplication[];
+  recentActivity: Activity[];
+}

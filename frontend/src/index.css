@@ -600,3 +600,80 @@ tbody tr:hover {
   background: var(--error-soft);
   color: var(--error);
 }
+
+/* --- dashboard --------------------------------------------------------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 720px) {
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.stat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+
+.stat-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+.chart-card .card-title {
+  align-items: flex-start;
+}
+
+.chart-card .card-title p {
+  margin: 0;
+}
+
+.chart-body {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.chart-body svg text {
+  font-family: inherit;
+}
+
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.attention-row,
+.activity-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.activity-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+
+.attention-row:last-child,
+.activity-row:last-child {
+  border-bottom: none;
+}

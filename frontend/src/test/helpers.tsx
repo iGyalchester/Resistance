@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import App from '../App';
 import { AuthProvider } from '../auth/AuthContext';
-import type { ApplicationDetailView, ApplicationView, ContactView, Me, ProfileView } from '../api/types';
+import type { AnalyticsView, ApplicationDetailView, ApplicationView, ContactView, Me, ProfileView } from '../api/types';
 
 export const BORIS: Me = {
   fullName: 'Boris Gerard',
@@ -49,6 +49,40 @@ export const CONTACTS: ContactView[] = [
   { id: 3, firstName: 'Dana', lastName: 'Reyes', email: 'dana.reyes@acme.example', applicationCount: 1 },
   { id: 4, firstName: 'Marcus', lastName: 'Lee', email: null, applicationCount: 0 },
 ];
+
+export const ANALYTICS: AnalyticsView = {
+  total: 5,
+  active: 4,
+  countsByStatus: { APPLIED: 1, SCREENING: 1, INTERVIEW: 1, OFFER: 1, ACCEPTED: 0, REJECTED: 1, WITHDRAWN: 0 },
+  responseRate: 0.8,
+  offerRate: 0.2,
+  medianDaysToFirstResponse: 15.5,
+  medianDaysInStage: { APPLIED: 15.5 },
+  weeklyApplications: Array.from({ length: 12 }, (_, i) => ({
+    weekStart: `2026-0${i < 3 ? 6 : i < 8 ? 7 : 8}-${String(((i * 7) % 28) + 1).padStart(2, '0')}`,
+    created: i === 11 ? 2 : 0,
+  })),
+  stale: [
+    { id: 1, companyName: 'Acme Corp', positionTitle: 'Backend Engineer', status: 'APPLIED', contactId: 3, daysSinceChange: 19 },
+  ],
+  recentActivity: [
+    { applicationId: 4, companyName: 'Umbrella Labs', fromStatus: 'APPLIED', toStatus: 'OFFER', changedAt: '2026-08-27T17:45:00Z', source: 'INTAKE' },
+    { applicationId: 1, companyName: 'Acme Corp', fromStatus: null, toStatus: 'APPLIED', changedAt: '2026-08-20T09:00:00Z', source: 'INTAKE' },
+  ],
+};
+
+export const EMPTY_ANALYTICS: AnalyticsView = {
+  total: 0,
+  active: 0,
+  countsByStatus: { APPLIED: 0, SCREENING: 0, INTERVIEW: 0, OFFER: 0, ACCEPTED: 0, REJECTED: 0, WITHDRAWN: 0 },
+  responseRate: null,
+  offerRate: null,
+  medianDaysToFirstResponse: null,
+  medianDaysInStage: {},
+  weeklyApplications: [],
+  stale: [],
+  recentActivity: [],
+};
 
 export const PROFILE: ProfileView = { fullName: 'Boris Gerard', email: 'boris@gmail.com', phone: '+1 555 0100' };
 

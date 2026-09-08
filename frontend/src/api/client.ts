@@ -1,4 +1,5 @@
 import type {
+  AnalyticsView,
   ApplicationDetailView,
   ApplicationRequest,
   ApplicationView,
@@ -149,4 +150,10 @@ export function fetchProfile(): Promise<ProfileView> {
 
 export function updateProfile(body: ProfileRequest): Promise<ProfileView> {
   return request('/api/profile', json('PUT', body));
+}
+
+// --- analytics ----------------------------------------------------------
+
+export function fetchAnalytics(): Promise<AnalyticsView> {
+  return request('/api/analytics/summary');
 }

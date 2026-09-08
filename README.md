@@ -188,7 +188,7 @@ Screens so far:
 | Route | What |
 |---|---|
 | `/login`, `/login/code` | passwordless login |
-| `/dashboard` | your intake address and applications at a glance |
+| `/dashboard` | your intake address, four headline numbers, pipeline / weekly / time-in-stage charts, what has gone quiet, recent activity |
 | `/applications` | search, status chips, sortable columns, change a status in place, add |
 | `/applications/:id` | details, the status timeline (email vs. manual changes), edit, delete |
 | `/contacts` | your address book with how many applications reference each contact |
@@ -226,6 +226,7 @@ CI builds and tests the frontend in its own job.
 | `GET /api/applications/{id}/history` | The timeline alone |
 | `GET/POST/PUT/DELETE /api/contacts[/{id}]` | Your address book, with how many applications reference each contact |
 | `GET /api/profile`, `PUT /api/profile` | Name and phone (email is identity, read-only) |
+| `GET /api/analytics/summary` | The dashboard's numbers, computed server-side from your applications and status history |
 
 Errors have one shape: `{"error":"<code>"}`, plus a `fields` map naming each
 invalid field on `validation`. A row that is not yours is a `404 not_found`,
