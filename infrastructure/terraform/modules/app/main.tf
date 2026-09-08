@@ -275,6 +275,8 @@ locals {
     ]
   }
 
+  # One key serves both services: intake-service for Claude-backed email
+  # parsing, mvc-service for the in-app assistant. Blank ARN = both off.
   common_secrets = concat(
     [
       { name = "DB_USERNAME", valueFrom = "${var.db_secret_arn}:username::" },
@@ -283,6 +285,9 @@ locals {
     ],
     var.audit_token_secret_arn != "" ? [
       { name = "TRACKER_AUDIT_TOKEN", valueFrom = var.audit_token_secret_arn },
+    ] : [],
+    var.anthropic_api_key_secret_arn != "" ? [
+      { name = "ANTHROPIC_API_KEY", valueFrom = var.anthropic_api_key_secret_arn },
     ] : []
   )
 
@@ -291,14 +296,9 @@ locals {
       { name = "SMTP_USERNAME", valueFrom = var.parameter_arns["smtp_username"] },
       { name = "SMTP_PASSWORD", valueFrom = var.parameter_arns["smtp_password"] },
     ]
-    intake-service = concat(
-      [
-        { name = "INTAKE_WEBHOOK_TOKEN", valueFrom = var.parameter_arns["intake_webhook_token"] },
-      ],
-      var.anthropic_api_key_secret_arn != "" ? [
-        { name = "ANTHROPIC_API_KEY", valueFrom = var.anthropic_api_key_secret_arn },
-      ] : []
-    )
+    intake-service = [
+      { name = "INTAKE_WEBHOOK_TOKEN", valueFrom = var.parameter_arns["intake_webhook_token"] },
+    ]
   }
 }
 

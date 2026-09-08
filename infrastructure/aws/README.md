@@ -110,7 +110,7 @@ task definitions.
 | `TRACKER_ENC_KEY` | SSM SecureString (generated, KMS-encrypted) | intake, mvc |
 | `INTAKE_ADDRESS` | `track@<mail domain>` | mvc |
 | `TRACKER_AUDIT_URL`, `TRACKER_AUDIT_TOKEN` *(optional)* | AuditFlow ingestion; token from Secrets Manager | intake, mvc |
-| `ANTHROPIC_API_KEY` *(optional)* | Secrets Manager, for Claude-backed parsing | intake |
+| `ANTHROPIC_API_KEY` *(optional)* | Secrets Manager; Claude-backed email parsing and the in-app assistant | intake, mvc |
 
 Dev needs none of this: no profile flag (dev is the default), local MySQL
 from docker-compose, logged OTP codes, open webhook, plaintext PII.
