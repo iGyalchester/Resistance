@@ -313,9 +313,26 @@ right input.
 route with fetch stubbed (`test/helpers.tsx`), clicks through it with
 `user-event`, and asserts the exact JSON that was sent. `setup.ts`
 unmounts between tests; without that every render would stack up.
+**The chat, on the client side.** `components/assistant/AssistantConversation.tsx`
+is one component used twice: inside the drawer (`AssistantDrawer.tsx`,
+opened from the shell's "Ask" button or the dashboard, kept mounted while
+hidden so the chat survives closing it) and on `/assistant`. Its state is
+a list of turns; the assistant's turn grows as `delta` events arrive, gains
+a card per `action` event, and ends with `done` or an error row that
+offers Retry. Reading the stream is a plain `fetch` POST (EventSource can
+only GET and cannot carry the CSRF header) whose body is read chunk by
+chunk through `api/sse.ts`, a small parser for the `text/event-stream`
+format that keeps half an event until the rest arrives. **Applying a card
+is an ordinary REST call** from this component (`PUT /api/applications/{id}`
+with the current fields and the proposed status, `POST /api/applications`,
+`POST /api/contacts`), which is the whole point: the model suggests, the
+same code path as the pages changes things. `pages/HelpPage.tsx` renders
+`GET /api/help` and links each entry to the assistant with the question
+prefilled (`/assistant?q=...`).
 **Where:** `components/AppShell.tsx`, `hooks/useAsync.ts`,
 `pages/ApplicationsPage.tsx`, `pages/ApplicationDetailPage.tsx`,
-`components/forms/`, `test/*.test.tsx`.
+`components/forms/`, `components/assistant/`, `api/sse.ts`,
+`pages/AssistantPage.tsx`, `pages/HelpPage.tsx`, `test/*.test.tsx`.
 
 ### Dashboards: what the numbers mean
 
@@ -445,7 +462,12 @@ intake parser uses, now in mvc-service, behind three ideas worth knowing.
    model is told "the user must confirm", and a mistaken suggestion costs a
    click, not a row. At most three tool rounds per message.
 
-**The stream.** Four event names: `delta {text}` fragments, `action
+**The stream, and why SSE.** Server-sent events are the simplest way to
+push text to a browser one piece at a time: an ordinary HTTP response
+that stays open and carries `event:` / `data:` lines separated by blank
+lines, no WebSocket handshake, no extra port, and it passes through the
+ALB and the Vite proxy untouched. The browser's built-in `EventSource`
+cannot POST, so the React client reads the response body itself. Four event names: `delta {text}` fragments, `action
 {proposal}` cards, then exactly one `done {usage}` (token counts) or
 `error {code}` (`rate_limited`, `assistant_unavailable`, `assistant_disabled`,
 `internal` - never a stack trace). `AssistantApiController` hands back

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { fetchAnalytics, updateApplication } from '../api/client';
 import type { StaleApplication } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { useAssistantDrawer } from '../components/assistant/AssistantDrawerContext';
 import ErrorBanner from '../components/ErrorBanner';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
@@ -31,6 +32,7 @@ function daysText(value: number | null | undefined): string {
 export default function DashboardPage() {
   const { me } = useAuth();
   const { notify } = useToast();
+  const assistant = useAssistantDrawer();
   const { data, error, loading, reload, setData } = useAsync(fetchAnalytics);
   const [copied, setCopied] = useState(false);
 
@@ -62,7 +64,14 @@ export default function DashboardPage() {
 
   return (
     <>
-      <h1>Dashboard</h1>
+      <div className="page-title">
+        <h1>Dashboard</h1>
+        {me?.features?.assistant && (
+          <button type="button" className="btn" onClick={() => assistant.open()}>
+            Ask the assistant
+          </button>
+        )}
+      </div>
 
       {me?.intakeAddress && (
         <section className="card intake">

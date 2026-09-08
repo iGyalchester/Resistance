@@ -1,10 +1,13 @@
+import { SseParser } from './sse';
 import type {
   AnalyticsView,
   ApplicationDetailView,
   ApplicationRequest,
   ApplicationView,
+  AssistantEvent,
   ContactRequest,
   ContactView,
+  FaqEntry,
   Me,
   ProfileRequest,
   ProfileView,
@@ -41,8 +44,8 @@ function csrfToken(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+function headersFor(init: RequestInit, accept: string): Record<string, string> {
+  const headers: Record<string, string> = { Accept: accept };
   if (init.body) {
     headers['Content-Type'] = 'application/json';
   }
@@ -52,27 +55,35 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       headers['X-XSRF-TOKEN'] = token;
     }
   }
+  return headers;
+}
 
-  const response = await fetch(path, { ...init, headers });
-
+/** Turns a failed response into the matching error; never returns. */
+async function fail(response: Response): Promise<never> {
   if (response.status === 401) {
     throw new UnauthorizedError();
   }
-  if (!response.ok) {
-    let message = `request failed (${response.status})`;
-    let fields: Record<string, string> = {};
-    try {
-      const body = await response.json();
-      if (body && typeof body.error === 'string') {
-        message = body.error;
-      }
-      if (body && body.fields && typeof body.fields === 'object') {
-        fields = body.fields;
-      }
-    } catch {
-      // non-JSON error body - keep the generic message
+  let message = `request failed (${response.status})`;
+  let fields: Record<string, string> = {};
+  try {
+    const body = await response.json();
+    if (body && typeof body.error === 'string') {
+      message = body.error;
     }
-    throw new ApiError(response.status, message, fields);
+    if (body && body.fields && typeof body.fields === 'object') {
+      fields = body.fields;
+    }
+  } catch {
+    // non-JSON error body - keep the generic message
+  }
+  throw new ApiError(response.status, message, fields);
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, { ...init, headers: headersFor(init, 'application/json') });
+
+  if (!response.ok) {
+    await fail(response);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -156,4 +167,53 @@ export function updateProfile(body: ProfileRequest): Promise<ProfileView> {
 
 export function fetchAnalytics(): Promise<AnalyticsView> {
   return request('/api/analytics/summary');
+}
+
+// --- assistant ----------------------------------------------------------
+
+/**
+ * Sends one chat message and delivers the reply's events as they stream
+ * in. A plain fetch rather than EventSource because EventSource can only
+ * GET and cannot carry the CSRF header. Resolves when the stream ends;
+ * the caller aborts through the signal.
+ */
+export async function streamAssistant(
+  message: string,
+  onEvent: (event: AssistantEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const init: RequestInit = { method: 'POST', body: JSON.stringify({ message }), signal };
+  const response = await fetch('/api/assistant/messages', {
+    ...init,
+    headers: headersFor(init, 'text/event-stream'),
+  });
+  if (!response.ok) {
+    await fail(response);
+  }
+  if (!response.body) {
+    return;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const parser = new SseParser();
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    for (const event of parser.push(decoder.decode(value, { stream: true }))) {
+      onEvent(event);
+    }
+  }
+  for (const event of parser.push('\n\n')) {
+    onEvent(event);
+  }
+}
+
+export function resetAssistant(): Promise<void> {
+  return request('/api/assistant/conversation', { method: 'DELETE' });
+}
+
+// --- help ---------------------------------------------------------------
+
+export function fetchHelp(): Promise<FaqEntry[]> {
+  return request('/api/help');
 }
