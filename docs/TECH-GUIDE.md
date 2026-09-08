@@ -317,6 +317,45 @@ unmounts between tests; without that every render would stack up.
 `pages/ApplicationsPage.tsx`, `pages/ApplicationDetailPage.tsx`,
 `components/forms/`, `test/*.test.tsx`.
 
+### Dashboards: what the numbers mean
+
+Everything on the dashboard comes from one endpoint,
+`/api/analytics/summary`, and one class, `analytics/AnalyticsService`. Its
+`compute` method is a pure function: give it the account's applications,
+their status history and a clock, get back the numbers. No database inside,
+so `AnalyticsServiceTests` pins every rule below with hand-built histories.
+
+| Number | Definition | Why this way |
+|---|---|---|
+| **Active** | applications whose status is Applied, Screening, Interview or Offer | Rejected, Accepted and Withdrawn are finished |
+| **Response rate** | applications that ever left Applied, divided by all applications | "did anyone ever reply", not "is it going well" |
+| **Offer rate** | applications that ever reached Offer or Accepted, divided by all | reached, not currently at - a later rejection still counts as an offer |
+| **First response** | median days from the creation event to the first change out of Applied | medians, not averages: one application that sat for 200 days must not drag "typical" up |
+| **Pipeline** | how many are at each stage right now | current state, so the seven counts add up to the total |
+| **Applications per week** | creation events bucketed by ISO week, last twelve weeks, zeros filled | your own pace; an empty week is a real data point |
+| **Time in stage** | median length of *completed* stays per stage | an open stay says nothing about how long the stage takes, so it is excluded |
+| **Needs attention** | Applied or Screening, and no status change for 14 days or more | the list to chase or let go; "Mark withdrawn" is one click |
+| **Recent activity** | the last ten status changes across the account, newest first | with who made each: an email or you |
+
+Two things the code is careful about. Rates are `null` (shown as a dash)
+when there are no applications, never a `0%` that looks like a result.
+And a "creation event" is the history row whose `fromStatus` is null -
+the same row intake and the manual path both write - so the dashboard
+counts what actually happened, not what a timestamp column suggests.
+
+**The charts** are Recharts components under `frontend/src/charts/`, and
+they follow the data-visualisation rules the repo adopted: one hue for a
+single measure (validated against the app's light and dark card
+surfaces; the validator output is quoted in `charts/palette.ts`), thin
+bars with value labels, a tooltip on hover, `role="img"` with a sentence
+that says what the chart shows, and a "View as table" toggle so the
+numbers are never only pixels. Charts size themselves to the card with a
+`ResizeObserver`; the test DOM has none, so `ChartCard` falls back to a
+default width there.
+**Where:** `mvc-service/.../analytics/`, `frontend/src/charts/`,
+`frontend/src/pages/DashboardPage.tsx`, `AnalyticsServiceTests`,
+`DashboardPage.test.tsx`.
+
 ### The JSON API the SPA talks to
 
 **What:** `@RestController` classes in `mvc-service/.../api/` — same

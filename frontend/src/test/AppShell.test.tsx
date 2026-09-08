@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ADMIN_BORIS, APPLICATIONS, BORIS, jsonResponse, noContent, renderApp } from './helpers';
+import { ADMIN_BORIS, ANALYTICS, BORIS, jsonResponse, noContent, renderApp } from './helpers';
 
 describe('app shell', () => {
   afterEach(() => {
@@ -11,7 +11,7 @@ describe('app shell', () => {
   it('shows the main navigation and hides Admin for a plain user', async () => {
     renderApp('/dashboard', {
       'GET /api/auth/me': () => jsonResponse(BORIS),
-      'GET /api/applications': () => jsonResponse(APPLICATIONS),
+      'GET /api/analytics/summary': () => jsonResponse(ANALYTICS),
     });
 
     const nav = await screen.findByRole('navigation', { name: 'Main' });
@@ -25,7 +25,7 @@ describe('app shell', () => {
   it('shows Admin when the server says the account is an admin', async () => {
     renderApp('/dashboard', {
       'GET /api/auth/me': () => jsonResponse(ADMIN_BORIS),
-      'GET /api/applications': () => jsonResponse(APPLICATIONS),
+      'GET /api/analytics/summary': () => jsonResponse(ANALYTICS),
     });
 
     expect(await screen.findByRole('link', { name: 'Admin' })).toBeInTheDocument();
@@ -36,14 +36,14 @@ describe('app shell', () => {
     let loggedOut = false;
     renderApp('/dashboard', {
       'GET /api/auth/me': () => jsonResponse(BORIS),
-      'GET /api/applications': () => jsonResponse(APPLICATIONS),
+      'GET /api/analytics/summary': () => jsonResponse(ANALYTICS),
       'POST /api/auth/logout': () => {
         loggedOut = true;
         return noContent();
       },
     });
 
-    await screen.findByText('Acme Corp');
+    await screen.findByText('Active');
     await user.click(screen.getByRole('button', { name: 'Log out' }));
 
     await waitFor(() => expect(loggedOut).toBe(true));
