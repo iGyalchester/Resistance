@@ -130,3 +130,30 @@ export function bodyOf(init?: RequestInit): unknown {
 }
 
 export { jsonResponse };
+
+export const ASSISTANT_BORIS: Me = { ...BORIS, features: { assistant: true } };
+
+export const FAQ = [
+  { id: 'intake-address', question: 'What is my intake address?', answer: 'The track+alias address on your dashboard.' },
+  { id: 'statuses', question: 'What do the statuses mean?', answer: 'Applied, Screening, Interview, Offer, then the end states.' },
+];
+
+/** One SSE block: `event:<name>` + JSON data + blank line. */
+export function sse(name: string, data: unknown): string {
+  return `event:${name}\ndata:${JSON.stringify(data)}\n\n`;
+}
+
+/**
+ * A text/event-stream response delivered in the given chunks, one per
+ * read, the way a real network hands them over.
+ */
+export function sseResponse(chunks: string[], status = 200): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  });
+  return new Response(stream, { status, headers: { 'Content-Type': 'text/event-stream' } });
+}

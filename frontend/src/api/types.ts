@@ -128,3 +128,36 @@ export interface AnalyticsView {
   stale: StaleApplication[];
   recentActivity: Activity[];
 }
+
+// --- assistant ------------------------------------------------------------
+
+/** A change the assistant suggests; nothing happens until the user applies it. */
+export interface Proposal {
+  kind: 'status_change' | 'new_application' | 'contact' | string;
+  applicationId?: number | null;
+  companyName?: string | null;
+  positionTitle?: string | null;
+  status?: string | null;
+  reason?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+}
+
+export interface AssistantUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** One server-sent event from POST /api/assistant/messages. */
+export type AssistantEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'action'; proposal: Proposal }
+  | { type: 'done'; usage: AssistantUsage }
+  | { type: 'error'; code: string };
+
+export interface FaqEntry {
+  id: string;
+  question: string;
+  answer: string;
+}

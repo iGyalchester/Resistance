@@ -193,6 +193,8 @@ Screens so far:
 | `/applications/:id` | details, the status timeline (email vs. manual changes), edit, delete |
 | `/contacts` | your address book with how many applications reference each contact |
 | `/profile` | name and phone; email is read-only |
+| `/assistant` (and the drawer) | chat about your own applications; suggested changes are cards you apply or dismiss; off without `ANTHROPIC_API_KEY` |
+| `/help` | the FAQ, each entry with an "Ask the assistant" link |
 
 Every signed-in page sits inside one shell (navigation, who is logged in,
 log out). Saves confirm with a short toast; an in-place status change is
@@ -241,6 +243,19 @@ the app this deployment has switched on).
 gains a chat that answers from *your* applications and the FAQ, and
 suggests changes ("Withdraw Acme?") as cards you confirm; the model never
 writes to the database itself. It is off, and hidden, without the key.
+A typical exchange:
+
+> **You:** Which applications should I follow up on?
+> **Assistant:** Acme Corp (Backend Engineer) has been sitting in Applied
+> for 19 days with no reply; everything else moved in the last week. Want
+> me to mark it withdrawn, or draft a nudge?
+> **You:** Withdraw it.
+> **Assistant:** *[card: Mark Acme Corp as Withdrawn — Apply / Dismiss]*
+> Confirm the card above and the timeline will record it.
+
+Words appear as the model produces them (a server-sent event stream), the
+chat opens as a drawer on any page or as a full page, and "New
+conversation" forgets the history kept on your session.
 Knobs live under `tracker.ai.*` (model `claude-opus-5`, effort, 30 messages
 per hour per account, history caps). The design - grounding, prompt-injection
 posture, why proposals instead of writes - is explained in

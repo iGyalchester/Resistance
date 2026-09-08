@@ -3,8 +3,10 @@ import { RequireAuth } from './auth/AuthContext';
 import AppShell from './components/AppShell';
 import ApplicationDetailPage from './pages/ApplicationDetailPage';
 import ApplicationsPage from './pages/ApplicationsPage';
+import AssistantPage from './pages/AssistantPage';
 import ContactsPage from './pages/ContactsPage';
 import DashboardPage from './pages/DashboardPage';
+import HelpPage from './pages/HelpPage';
 import LoginCodePage from './pages/LoginCodePage';
 import LoginEmailPage from './pages/LoginEmailPage';
 import ProfilePage from './pages/ProfilePage';
@@ -30,6 +32,8 @@ export default function App() {
         <Route path="/applications" element={<ApplicationsPage />} />
         <Route path="/applications/:id" element={<ApplicationDetailPage />} />
         <Route path="/contacts" element={<ContactsPage />} />
+        <Route path="/assistant" element={<AssistantPage />} />
+        <Route path="/help" element={<HelpPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
