@@ -63,6 +63,21 @@ class JobApplicationOwnershipTests {
     }
 
     @Test
+    void historyOfSomeoneElsesApplicationIsEmptyAndNeverQueried() {
+        assertTrue(service.historyForOwner(42, 1).isEmpty());
+        verify(history, never()).findByApplicationIdOrderByChangedAtAsc(anyInt());
+    }
+
+    @Test
+    void historyOfOwnApplicationIsLookedUpByItsId() {
+        StatusHistory created = new StatusHistory(theirs, null, ApplicationStatus.APPLIED,
+                Instant.parse("2026-08-20T09:00:00Z"), StatusHistory.SOURCE_INTAKE);
+        when(history.findByApplicationIdOrderByChangedAtAsc(42)).thenReturn(java.util.List.of(created));
+
+        assertEquals(java.util.List.of(created), service.historyForOwner(42, 2).orElseThrow());
+    }
+
+    @Test
     void someoneElsesApplicationLooksMissing() {
         assertTrue(service.findByIdForOwner(42, 1).isEmpty());
         assertTrue(service.findByIdForOwner(42, 2).isPresent());

@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -44,6 +47,7 @@ public class AuthApiController {
     private final UserAccountRepository accountRepository;
     private final String intakeBaseAddress;
     private final AuditEventClient audit;
+    private final MeView.Features features;
 
     public AuthApiController(OtpService otpService,
                              SessionAuthenticator sessionAuthenticator,
@@ -51,7 +55,8 @@ public class AuthApiController {
                              OtpRequestThrottle ipOtpThrottle,
                              UserAccountRepository accountRepository,
                              @Value("${tracker.intake.address:track@resistance.example}") String intakeBaseAddress,
-                             AuditEventClient auditEventClient) {
+                             AuditEventClient auditEventClient,
+                             @Value("${tracker.ai.api-key:}") String assistantApiKey) {
         this.otpService = otpService;
         this.sessionAuthenticator = sessionAuthenticator;
         this.emailThrottle = emailOtpThrottle;
@@ -59,6 +64,9 @@ public class AuthApiController {
         this.accountRepository = accountRepository;
         this.intakeBaseAddress = intakeBaseAddress;
         this.audit = auditEventClient;
+        // the assistant is on exactly when a key is configured; the shell
+        // hides the feature otherwise instead of showing a broken page
+        this.features = new MeView.Features(assistantApiKey != null && !assistantApiKey.isBlank());
     }
 
     public record CodeRequest(String email) {
@@ -108,7 +116,7 @@ public class AuthApiController {
         sessionAuthenticator.establish(account.get(), request, response);
         audit.emit("AUTH_EVENT", "LOGIN_SUCCESS", account.get().getEmail(),
                 "login", request.getRemoteAddr());
-        return ResponseEntity.ok(MeView.of(account.get(), intakeBaseAddress));
+        return ResponseEntity.ok(MeView.of(account.get(), intakeBaseAddress, currentRoles(), features));
     }
 
     @GetMapping("/me")
@@ -119,7 +127,18 @@ public class AuthApiController {
         if (account == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "unauthenticated"));
         }
-        return ResponseEntity.ok(MeView.of(account, intakeBaseAddress));
+        return ResponseEntity.ok(MeView.of(account, intakeBaseAddress, currentRoles(), features));
+    }
+
+    /** ROLE_* authorities of the current security context, without the prefix; USER when none. */
+    static List<String> currentRoles() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth == null ? List.of() : auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(a -> a.startsWith("ROLE_"))
+                .map(a -> a.substring("ROLE_".length()))
+                .toList();
+        return roles.isEmpty() ? List.of("USER") : roles;
     }
 
     @PostMapping("/logout")

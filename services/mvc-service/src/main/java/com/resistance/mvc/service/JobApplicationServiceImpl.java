@@ -93,6 +93,12 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 	}
 
 	@Override
+	public Optional<List<StatusHistory>> historyForOwner(int theId, int ownerId) {
+		return findByIdForOwner(theId, ownerId)
+				.map(app -> historyRepository.findByApplicationIdOrderByChangedAtAsc(app.getId()));
+	}
+
+	@Override
 	public boolean deleteByIdForOwner(int theId, int ownerId) {
 		Optional<JobApplication> owned = findByIdForOwner(theId, ownerId);
 		if (owned.isEmpty()) {

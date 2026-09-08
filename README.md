@@ -203,7 +203,20 @@ CI builds and tests the frontend in its own job.
 | `POST /api/auth/login` | Verify the code; authenticates the session, returns the user |
 | `GET /api/auth/me` | Who is logged in (401 when nobody) |
 | `POST /api/auth/logout` | End the session |
-| `GET /api/applications` | The session owner's applications |
+| `GET /api/applications` | The session owner's applications; `?status=` and `?q=` filter |
+| `GET /api/applications/{id}` | One application with its contact id and status timeline |
+| `POST /api/applications` | Create (`companyName`, `status` required; `contactId` must be your own; `appliedOn` optional) |
+| `PUT /api/applications/{id}` | Update; a status change is recorded in the timeline |
+| `DELETE /api/applications/{id}` | Delete (history rows go with it) |
+| `GET /api/applications/{id}/history` | The timeline alone |
+| `GET/POST/PUT/DELETE /api/contacts[/{id}]` | Your address book, with how many applications reference each contact |
+| `GET /api/profile`, `PUT /api/profile` | Name and phone (email is identity, read-only) |
+
+Errors have one shape: `{"error":"<code>"}`, plus a `fields` map naming each
+invalid field on `validation`. A row that is not yours is a `404 not_found`,
+exactly like one that does not exist, so ids cannot be probed. `GET
+/api/auth/me` also reports `roles` and `features` (which optional parts of
+the app this deployment has switched on).
 
 Auth is the session cookie itself — no tokens. CSRF tokens ride in the
 readable `XSRF-TOKEN` cookie and come back as an `X-XSRF-TOKEN` header;
