@@ -87,6 +87,8 @@ class ApplicationApiControllerTests {
                 .andExpect(jsonPath("$[0].companyName").value("Acme Corp"))
                 .andExpect(jsonPath("$[0].status").value("INTERVIEW"))
                 .andExpect(jsonPath("$[0].contactName").value("Dana Reyes"))
+                .andExpect(jsonPath("$[0].contactId").value(3))
+                .andExpect(jsonPath("$[1].contactId").doesNotExist())
                 .andExpect(jsonPath("$[1].positionTitle").doesNotExist())
                 .andExpect(jsonPath("$[1].contactName").doesNotExist());
 

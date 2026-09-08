@@ -18,7 +18,7 @@ public record ApplicationDetailView(int id, String companyName, String positionT
         return new ApplicationDetailView(
                 flat.id(), flat.companyName(), flat.positionTitle(), flat.status(), flat.appliedOn(),
                 application.getUpdatedAt(),
-                application.getContact() == null ? null : application.getContact().getId(),
+                flat.contactId(),
                 flat.contactName(),
                 history.stream().map(StatusChangeView::of).toList());
     }
