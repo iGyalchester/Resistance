@@ -48,14 +48,17 @@ class AuthApiControllerTests {
         SessionAuthenticator authenticator =
                 new SessionAuthenticator(new HttpSessionSecurityContextRepository());
 
-        AuthApiController controller = new AuthApiController(otpService, authenticator,
-                emailThrottle, ipThrottle, accounts, "track@resistance.example",
-                com.resistance.shared.utils.audit.AuditEventClient.disabled());
-        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(controller(authenticator, "")).build();
 
         boris = new UserAccount("Boris Gerard", "boris@gmail.com");
         boris.setId(7);
         boris.setIntakeAlias("boris2k4mp9");
+    }
+
+    private AuthApiController controller(SessionAuthenticator authenticator, String assistantKey) {
+        return new AuthApiController(otpService, authenticator,
+                emailThrottle, ipThrottle, accounts, "track@resistance.example",
+                com.resistance.shared.utils.audit.AuditEventClient.disabled(), assistantKey);
     }
 
     @Test
@@ -94,6 +97,8 @@ class AuthApiControllerTests {
                 .andExpect(jsonPath("$.fullName").value("Boris Gerard"))
                 .andExpect(jsonPath("$.email").value("boris@gmail.com"))
                 .andExpect(jsonPath("$.intakeAddress").value("track+boris2k4mp9@resistance.example"))
+                .andExpect(jsonPath("$.roles[0]").value("USER"))
+                .andExpect(jsonPath("$.features.assistant").value(false))
                 .andReturn();
 
         assertEquals(7, result.getRequest().getSession()
@@ -122,6 +127,19 @@ class AuthApiControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("boris@gmail.com"))
                 .andExpect(jsonPath("$.intakeAddress").value("track+boris2k4mp9@resistance.example"));
+    }
+
+    @Test
+    void meReportsTheAssistantFeatureWhenAKeyIsConfigured() throws Exception {
+        when(accounts.findById(7)).thenReturn(Optional.of(boris));
+        MockMvc withKey = MockMvcBuilders.standaloneSetup(
+                controller(new SessionAuthenticator(new HttpSessionSecurityContextRepository()), "sk-test"))
+                .build();
+
+        withKey.perform(get("/api/auth/me").sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.features.assistant").value(true))
+                .andExpect(jsonPath("$.roles[0]").value("USER"));
     }
 
     @Test

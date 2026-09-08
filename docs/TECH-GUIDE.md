@@ -297,7 +297,21 @@ is. (`rest-api-service`, its unsecured twin, has been deleted: it was
 `security-service` minus its security config, and a module whose whole
 purpose was "the version without the safety on" is a liability, not a
 lesson.)
+**Validation and errors.** Request bodies are records annotated with
+Bean Validation constraints (`@NotBlank`, `@Size`, `@Email`); `@Valid` on the
+parameter makes Spring check them before the method runs. One class,
+`ApiErrorHandler` (a `@RestControllerAdvice` scoped to the api package),
+turns every failure into the same JSON shape: `{"error":"validation",
+"fields":{...}}` for bad input, `{"error":"bad_request"}` for JSON that
+cannot become the declared type (an unknown status name), `{"error":
+"not_found"}` for a row that is missing *or belongs to someone else* -
+the services throw `IllegalArgumentException` for the latter and the
+handler deliberately maps both to 404, so nobody can tell which ids
+exist. The React client parses one shape; the controllers never build
+error responses by hand.
 **Where:** `api/AuthApiController.java`, `api/ApplicationApiController.java`,
+`api/ContactApiController.java`, `api/ProfileApiController.java`,
+`api/ApiErrorHandler.java`, the `*Request` / `*View` records beside them,
 tests in `src/test/java/com/resistance/mvc/api/`.
 
 ### Auth from a SPA: the session cookie and the CSRF dance
