@@ -96,6 +96,10 @@ export default function AssistantConversation({ initialMessage, compact = false 
     endRef.current?.scrollIntoView?.({ block: 'end' });
   }, [turns]);
 
+  // leaving the page stops the reply: no updates to an unmounted component,
+  // and the server stops the model stream on the next delta
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   const patch = useCallback((id: number, update: (turn: Turn) => Turn) => {
     setTurns((list) => list.map((t) => (t.id === id ? update(t) : t)));
   }, []);
@@ -127,11 +131,18 @@ export default function AssistantConversation({ initialMessage, compact = false 
             return { ...turn, pending: false, error: event.code };
         }
       });
+      if (event.type === 'error' && event.code === 'unauthenticated') {
+        setMe(null);
+      }
     };
 
     try {
       await streamAssistant(message, onEvent, controller.signal);
-      patch(replyId, (turn) => (turn.pending ? { ...turn, pending: false } : turn));
+      // the stream ended without done or error (server timeout, dropped
+      // connection): say so rather than leave an empty bubble
+      patch(replyId, (turn) =>
+        turn.pending ? { ...turn, pending: false, error: turn.text ? undefined : 'internal' } : turn,
+      );
     } catch (e) {
       if (e instanceof UnauthorizedError) {
         setMe(null);

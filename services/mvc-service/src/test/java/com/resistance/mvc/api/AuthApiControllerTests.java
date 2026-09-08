@@ -154,4 +154,18 @@ class AuthApiControllerTests {
         mockMvc.perform(post("/api/auth/logout").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
                 .andExpect(status().isNoContent());
     }
+
+    @Test
+    void absurdlyLongEmailIsRejectedBeforeAnyThrottleOrCode() throws Exception {
+        when(emailThrottle.tryAcquire(anyString())).thenReturn(true);
+        when(ipThrottle.tryAcquire(anyString())).thenReturn(true);
+
+        mockMvc.perform(post("/api/auth/code").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + "a".repeat(300) + "@x.io\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("email_invalid"));
+
+        verify(otpService, never()).requestCode(anyString());
+        verify(emailThrottle, never()).tryAcquire(anyString());
+    }
 }

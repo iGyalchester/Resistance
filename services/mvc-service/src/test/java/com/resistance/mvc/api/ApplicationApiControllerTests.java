@@ -265,4 +265,11 @@ class ApplicationApiControllerTests {
         verify(applicationService, never()).saveForOwner(any(), anyInt());
         verify(applicationService, never()).deleteByIdForOwner(anyInt(), anyInt());
     }
+
+    @Test
+    void nonNumericIdIsABadRequestNotAServerError() throws Exception {
+        mockMvc.perform(get("/api/applications/abc").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("bad_request"));
+    }
 }

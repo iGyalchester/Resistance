@@ -173,7 +173,9 @@ role on top; everything else - the React shell, its assets, the health
 check - is public, because it holds no data and the app decides on its own
 whether to show the login screen. Anonymous and forbidden calls get JSON
 (`401 unauthenticated`, `403 forbidden`), never a redirect. Logging in
-rotates the session id (blocking "session fixation" attacks) and stores a
+starts a brand-new session (a new id blocks "session fixation" attacks,
+and dropping the old attributes means nothing from a previous login on
+that browser, such as another account's chat, carries over) and stores a
 security context that the framework checks on every request.
 **CSRF** ("cross-site request forgery"): a malicious site can make your
 browser send requests to ours using your cookie. Spring Security's
@@ -502,7 +504,10 @@ cannot POST, so the React client reads the response body itself. Four event name
 `error {code}` (`rate_limited`, `assistant_unavailable`, `assistant_disabled`,
 `internal` - never a stack trace). `AssistantApiController` hands back
 Spring's `SseEmitter` and runs the reply on a virtual thread, so the
-servlet thread is free the moment the emitter is returned. History lives on
+servlet thread is free the moment the emitter is returned. If the browser
+leaves mid-answer (Stop, a closed tab, the two-minute timeout) the next
+fragment cannot be delivered and the reply is abandoned, which also closes
+the model stream so no more tokens are bought for nobody. History lives on
 the HTTP session (`Conversation`): text only, trimmed to 20 turns / 30k
 characters, gone at logout or `DELETE /api/assistant/conversation`, never
 stored in the database.

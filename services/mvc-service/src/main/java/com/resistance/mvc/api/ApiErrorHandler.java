@@ -7,6 +7,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -39,6 +44,12 @@ public class ApiErrorHandler {
         return ResponseEntity.badRequest().body(Map.of("error", "bad_request"));
     }
 
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<Map<String, Object>> badParameter(Exception e) {
+        // /api/applications/abc, or a required query parameter missing
+        return ResponseEntity.badRequest().body(Map.of("error", "bad_request"));
+    }
+
     @ExceptionHandler({NotFoundException.class, IllegalArgumentException.class})
     public ResponseEntity<Map<String, Object>> notFound(RuntimeException e) {
         // the services throw IllegalArgumentException for "not yours"; a
@@ -46,15 +57,27 @@ public class ApiErrorHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "not_found"));
     }
 
+    // These two are thrown by the streaming endpoint, whose caller asks for
+    // text/event-stream. A ResponseEntity would then fail content negotiation
+    // (no JSON converter is acceptable) and surface as a bare 500, so the
+    // JSON is written directly, whatever the Accept header says.
+
     @ExceptionHandler(UnauthenticatedException.class)
-    public ResponseEntity<Map<String, Object>> unauthenticated(UnauthenticatedException e) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "unauthenticated"));
+    public void unauthenticated(UnauthenticatedException e, HttpServletResponse response) throws IOException {
+        writeJson(response, HttpStatus.UNAUTHORIZED, "unauthenticated");
     }
 
     @ExceptionHandler(AssistantDisabledException.class)
-    public ResponseEntity<Map<String, Object>> assistantDisabled(AssistantDisabledException e) {
+    public void assistantDisabled(AssistantDisabledException e, HttpServletResponse response) throws IOException {
         // no API key configured: the feature is off, not broken
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", "assistant_disabled"));
+        writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, "assistant_disabled");
+    }
+
+    private static void writeJson(HttpServletResponse response, HttpStatus status, String code) throws IOException {
+        response.setStatus(status.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write("{\"error\":\"" + code + "\"}");
+        response.flushBuffer();
     }
 
     @ExceptionHandler(Exception.class)

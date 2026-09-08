@@ -44,6 +44,20 @@ class SessionAuthenticatorTests {
     }
 
     @Test
+    void loginStartsAFreshSessionSoNothingFromABrowsersPreviousLoginCarriesOver() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        String oldId = request.getSession(true).getId();
+        request.getSession().setAttribute("assistantConversation", "someone else's chat");
+
+        new SessionAuthenticator(repository, admins).establish(account("guest@example.com"),
+                request, new MockHttpServletResponse());
+
+        assertThat(request.getSession(false).getId()).isNotEqualTo(oldId);
+        assertThat(request.getSession(false).getAttribute("assistantConversation")).isNull();
+        assertThat(request.getSession(false).getAttribute(SessionAuthenticator.SESSION_ACCOUNT_ID)).isEqualTo(7);
+    }
+
+    @Test
     void anyoneElseIsJustAUser() {
         new SessionAuthenticator(repository, admins).establish(account("guest@example.com"),
                 new MockHttpServletRequest(), new MockHttpServletResponse());

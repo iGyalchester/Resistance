@@ -65,6 +65,9 @@ public class ClaudeAssistantModel implements AssistantModel {
 
         try (StreamResponse<RawMessageStreamEvent> stream = client.messages().createStreaming(params.build())) {
             MessageAccumulator accumulator = MessageAccumulator.create();
+            // onText may throw ClientGoneException; it leaves this block and
+            // the try-with-resources closes the HTTP stream, so the model
+            // stops generating for a browser that has already left
             stream.stream().forEach(event -> {
                 accumulator.accumulate(event);
                 event.contentBlockDelta()

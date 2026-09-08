@@ -128,6 +128,22 @@ class AssistantApiControllerTests {
         verify(assistant, never()).reply(anyInt(), any(), any(), any());
     }
 
+    /** The real client asks for text/event-stream; the error answers must still come back as JSON, not 500. */
+    @Test
+    void errorsAreJsonEvenWhenTheClientAsksForAnEventStream() throws Exception {
+        when(assistant.enabled()).thenReturn(true);
+        mockMvc.perform(post("/api/assistant/messages").accept(MediaType.TEXT_EVENT_STREAM)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"hi\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().json("{\"error\":\"unauthenticated\"}"));
+
+        when(assistant.enabled()).thenReturn(false);
+        mockMvc.perform(post("/api/assistant/messages").session(loggedIn()).accept(MediaType.TEXT_EVENT_STREAM)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"hi\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().json("{\"error\":\"assistant_disabled\"}"));
+    }
+
     @Test
     void disabledAssistantIs503() throws Exception {
         when(assistant.enabled()).thenReturn(false);

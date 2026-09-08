@@ -34,8 +34,11 @@ public class SpaConfig implements WebMvcConfigurer {
                 .addResolver(new PathResourceResolver() {
                     @Override
                     protected Resource getResource(String resourcePath, Resource location) throws IOException {
-                        Resource requested = location.createRelative(resourcePath);
-                        if (requested.exists() && requested.isReadable()) {
+                        // the base class also checks the resolved file is inside
+                        // the location; keep that even though the handler already
+                        // rejects ".." and friends
+                        Resource requested = super.getResource(resourcePath, location);
+                        if (requested != null) {
                             return requested;
                         }
                         if (resourcePath.contains(".")) {

@@ -161,6 +161,9 @@ public class AssistantService {
             inputTokens.increment(in);
             outputTokens.increment(out);
             listener.onDone(new AssistantListener.Usage(in, out));
+        } catch (ClientGoneException e) {
+            // nobody is listening: stop paying for tokens, keep nothing
+            log.debug("Assistant reply abandoned, client gone");
         } catch (AssistantUnavailableException e) {
             errors.increment();
             listener.onError("assistant_unavailable");

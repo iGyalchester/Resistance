@@ -7,12 +7,12 @@
   {
     "id": "intake-address",
     "question": "What is my intake address and where do I find it?",
-    "answer": "It is shown on your dashboard and looks like track+<your alias>@<domain>. The part after the plus sign is your personal alias: it is how the tracker knows an email belongs to you. Forward emails to that exact address. Mail sent to the bare track@ address without an alias is ignored."
+    "answer": "It is shown on your dashboard and looks like track+<your alias>@<domain>. The part after the plus sign is your personal alias: it is how the tracker knows an email belongs to you. Forward emails to that exact address. In production, mail sent to the bare track@ address without an alias is ignored; in a local development setup the bare address accepts mail and files it under the sender's account."
   },
   {
     "id": "forwarding",
     "question": "How do I forward an email so it gets tracked?",
-    "answer": "Use your mail client's Forward action and send the message to your intake address. The tracker reads the forwarded content, works out the company, the position if it can, and the status. Within about a minute the application shows up on the Applications page. If you already tracked that company, the existing application is updated instead of duplicated."
+    "answer": "Use your mail client's Forward action and send the message to your intake address. The tracker reads the forwarded content, works out the company, the position if it can, and the status. Within about a minute the application shows up on the Applications page. If you already tracked that company and position, the existing application is updated instead of duplicated; a different role at the same company gets its own row."
   },
   {
     "id": "statuses",
@@ -22,7 +22,7 @@
   {
     "id": "ignored-email",
     "question": "I forwarded an email and nothing appeared. Why?",
-    "answer": "The usual reasons: the email went to the bare track@ address instead of your personal track+alias@ address; the message was not recognisable as being about a job application (a newsletter, a calendar invite); or it was forwarded from an address that is not the one you log in with. Check the intake address on your dashboard and try again, or add the application by hand on the Applications page."
+    "answer": "The usual reasons: the email went to the bare track@ address instead of your personal track+alias@ address; the alias in the address was mistyped (an unknown alias is ignored); or the message was not recognisable as being about a job application (a newsletter, a calendar invite). Check the intake address on your dashboard and try again, or add the application by hand on the Applications page."
   },
   {
     "id": "manual",
@@ -32,7 +32,7 @@
   {
     "id": "login",
     "question": "How do I log in? I never set a password.",
-    "answer": "There is no password. Enter your email, and a six-digit code is sent to it; enter the code and you are in. Codes expire after ten minutes and allow five attempts. Your account was created the first time you forwarded an email, so log in with the same address you forwarded from."
+    "answer": "There is no password. Enter your email, and a six-digit code is sent to it; enter the code and you are in. Codes expire after ten minutes and allow five attempts. Log in with the email your account was created for: in production that is the address the operator set up your account with, and it is also where your intake alias was sent."
   },
   {
     "id": "code-not-arriving",
@@ -42,7 +42,7 @@
   {
     "id": "dashboard-numbers",
     "question": "What do the dashboard numbers mean?",
-    "answer": "Active is how many applications are still in play. Response rate is the share of applications that ever moved past Applied. Offers is the share that ever reached an offer. First response is the median number of days between sending an application and hearing anything back. The Needs attention list shows applications that have been waiting for two weeks or more with no change."
+    "answer": "Active is how many applications are still in play. Response rate is the share of applications that ever moved past Applied. Offers is the share that ever reached an offer. First response is the median number of days between sending an application and hearing anything back. The Needs attention list shows applications still in Applied or Screening that have had no change for two weeks or more."
   },
   {
     "id": "contacts",

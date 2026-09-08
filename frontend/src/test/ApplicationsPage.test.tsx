@@ -76,6 +76,56 @@ describe('applications page', () => {
     );
   });
 
+  it('rolls back only the failed row, keeping a change that landed meanwhile', async () => {
+    const user = userEvent.setup();
+    let failAcme: (r: Response) => void = () => {};
+    renderApp('/applications', {
+      'GET /api/auth/me': () => jsonResponse(BORIS),
+      'GET /api/applications': () => jsonResponse(APPLICATIONS),
+      // Acme's PUT stays in flight until we say so; Globex's answers at once
+      'PUT /api/applications/1': () => new Promise<Response>((resolve) => (failAcme = resolve)) as unknown as Response,
+      'PUT /api/applications/2': () => jsonResponse({ ...APPLICATIONS[1], status: 'SCREENING', history: [] }),
+    });
+
+    await screen.findByRole('link', { name: 'Acme Corp' });
+    await user.selectOptions(screen.getByLabelText('Status for Acme Corp'), 'REJECTED');
+    await user.selectOptions(screen.getByLabelText('Status for Globex'), 'SCREENING');
+    expect(await screen.findByText(/globex moved to screening/i)).toBeInTheDocument();
+
+    failAcme(jsonResponse({ error: 'internal' }, 500));
+
+    expect(await screen.findByText(/could not update acme corp/i)).toBeInTheDocument();
+    await waitFor(() =>
+      expect((screen.getByLabelText('Status for Acme Corp') as HTMLSelectElement).value).toBe('INTERVIEW'),
+    );
+    expect((screen.getByLabelText('Status for Globex') as HTMLSelectElement).value).toBe('SCREENING');
+  });
+
+  it('keeps focus inside the dialog and returns it to the opener on Escape', async () => {
+    const user = userEvent.setup();
+    renderApp('/applications', {
+      'GET /api/auth/me': () => jsonResponse(BORIS),
+      'GET /api/applications': () => jsonResponse(APPLICATIONS),
+      'GET /api/contacts': () => jsonResponse([]),
+    });
+
+    await screen.findByRole('link', { name: 'Acme Corp' });
+    const opener = screen.getByRole('button', { name: 'Add application' });
+    await user.click(opener);
+    const dialog = await screen.findByRole('dialog', { name: 'Add application' });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    // tabbing past the last control wraps to the first, never to the page behind
+    for (let i = 0; i < 12; i++) {
+      await user.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('adds an application through the dialog, requiring a company first', async () => {
     const user = userEvent.setup();
     let sent: unknown = null;

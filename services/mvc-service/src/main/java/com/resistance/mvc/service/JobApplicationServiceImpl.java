@@ -71,8 +71,12 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 					.orElseThrow(() -> new IllegalArgumentException(
 							"Application " + theJobApplication.getId()
 									+ " does not belong to account " + ownerId));
-			previousStatus = existing.getStatus();
-			// the form doesn't carry these; keep what the row already has
+			// read the stored status with a query: "existing" may be the very
+			// instance the caller mutated (same persistence context), in which
+			// case its status is already the new one and no history would be kept
+			previousStatus = applicationRepository.findStatusById(existing.getId())
+					.orElse(existing.getStatus());
+			// the request doesn't carry these; keep what the row already has
 			theJobApplication.setAppliedAt(existing.getAppliedAt());
 		}
 

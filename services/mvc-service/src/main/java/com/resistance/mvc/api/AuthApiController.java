@@ -39,6 +39,7 @@ import java.util.Optional;
 public class AuthApiController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthApiController.class);
+    static final int MAX_EMAIL_LENGTH = 254;
 
     private final OtpService otpService;
     private final SessionAuthenticator sessionAuthenticator;
@@ -85,9 +86,15 @@ public class AuthApiController {
         if (email.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "email_required"));
         }
+        if (email.length() > MAX_EMAIL_LENGTH) {
+            // longer than any real address; also keeps throttle keys bounded
+            return ResponseEntity.badRequest().body(Map.of("error", "email_invalid"));
+        }
 
-        boolean allowed = emailThrottle.tryAcquire("email:" + email.toLowerCase())
-                && ipThrottle.tryAcquire("ip:" + request.getRemoteAddr());
+        // the IP bucket first: it is the one an anonymous caller cannot vary,
+        // so a flood of made-up addresses never gets to grow the email map
+        boolean allowed = ipThrottle.tryAcquire("ip:" + request.getRemoteAddr())
+                && emailThrottle.tryAcquire("email:" + email.toLowerCase());
         metrics.otpRequested();
         if (allowed) {
             otpService.requestCode(email);

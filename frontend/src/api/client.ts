@@ -187,7 +187,9 @@ export async function streamAssistant(
   const init: RequestInit = { method: 'POST', body: JSON.stringify({ message }), signal };
   const response = await fetch('/api/assistant/messages', {
     ...init,
-    headers: headersFor(init, 'text/event-stream'),
+    // JSON as well: a 401/503/400 answer is JSON, and a server that only
+    // saw text/event-stream could refuse to render it
+    headers: headersFor(init, 'text/event-stream, application/json'),
   });
   if (!response.ok) {
     await fail(response);

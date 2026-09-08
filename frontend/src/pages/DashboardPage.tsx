@@ -46,7 +46,8 @@ export default function DashboardPage() {
 
   async function withdraw(app: StaleApplication) {
     if (!data) return;
-    setData({ ...data, stale: data.stale.filter((s) => s.id !== app.id) });
+    const index = data.stale.findIndex((s) => s.id === app.id);
+    setData((d) => (d ? { ...d, stale: d.stale.filter((s) => s.id !== app.id) } : d));
     try {
       await updateApplication(app.id, {
         companyName: app.companyName,
@@ -57,7 +58,13 @@ export default function DashboardPage() {
       notify(`${app.companyName} marked withdrawn`);
       reload();
     } catch {
-      setData(data);
+      // put this row back where it was; leave any other change alone
+      setData((d) => {
+        if (!d || d.stale.some((s) => s.id === app.id)) return d;
+        const stale = [...d.stale];
+        stale.splice(Math.min(index < 0 ? stale.length : index, stale.length), 0, app);
+        return { ...d, stale };
+      });
       notify(`Could not update ${app.companyName}. Try again.`, 'error');
     }
   }

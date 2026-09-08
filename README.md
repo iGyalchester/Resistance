@@ -121,8 +121,9 @@ docker compose -f infrastructure/docker-compose.yml up --build
 ```
 
 The mvc-service image build now also installs Node and builds the React
-app, so it takes a few minutes longer the first time. The tracker is then
-at `http://localhost:8085`.
+app, so it takes a few minutes longer the first time and needs outbound
+access to nodejs.org and registry.npmjs.org as well as Maven Central. The
+tracker is then at `http://localhost:8085`.
 
 The gateway then serves e.g. `http://localhost:8080/security/api/applications`.
 
@@ -252,7 +253,8 @@ the app this deployment has switched on).
 **The assistant.** With `ANTHROPIC_API_KEY` set on mvc-service the app
 gains a chat that answers from *your* applications and the FAQ, and
 suggests changes ("Withdraw Acme?") as cards you confirm; the model never
-writes to the database itself. It is off, and hidden, without the key.
+writes to the database itself. Without the key the drawer and its buttons are
+hidden and the Assistant page says it is not configured.
 A typical exchange:
 
 > **You:** Which applications should I follow up on?

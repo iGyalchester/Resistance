@@ -180,6 +180,21 @@ describe('assistant page', () => {
     expect(screen.getAllByText('hello')).toHaveLength(2);
   });
 
+  it('reports a stream that ended without an answer instead of leaving an empty bubble', async () => {
+    const user = userEvent.setup();
+    renderApp('/assistant', {
+      'GET /api/auth/me': () => jsonResponse(ASSISTANT_BORIS),
+      // the server timed out or dropped the connection: no done, no error
+      'POST /api/assistant/messages': () => sseResponse([':keep-alive\n\n']),
+    });
+
+    await user.type(await screen.findByLabelText('Message'), 'hello');
+    await user.keyboard('{Enter}');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong. Try again.');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
   it('turns a transport failure into a retryable error row', async () => {
     const user = userEvent.setup();
     renderApp('/assistant', {
