@@ -39,6 +39,8 @@ desired_count = 1
 
 # Optional integrations - secrets are ARNs of Secrets Manager secrets you
 # create by hand, never the values themselves.
-audit_url                    = ""
+audit_url = ""
+# who may open the Admin page; your own login email is the usual first entry
+admin_emails                 = []
 audit_token_secret_arn       = ""
 anthropic_api_key_secret_arn = ""

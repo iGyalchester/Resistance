@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { APPLICATIONS, BORIS, jsonResponse, renderApp } from './helpers';
+import { ANALYTICS, BORIS, jsonResponse, renderApp } from './helpers';
 
 describe('login flow', () => {
   afterEach(() => {
@@ -13,7 +13,7 @@ describe('login flow', () => {
     const { fetchMock } = renderApp('/login', {
       'POST /api/auth/code': () => jsonResponse({ message: 'ok' }),
       'POST /api/auth/login': () => jsonResponse(BORIS),
-      'GET /api/applications': () => jsonResponse(APPLICATIONS),
+      'GET /api/analytics/summary': () => jsonResponse(ANALYTICS),
     });
 
     await user.type(await screen.findByLabelText('Email address'), 'boris@gmail.com');
@@ -29,7 +29,7 @@ describe('login flow', () => {
     await user.click(screen.getByRole('button', { name: /log in/i }));
 
     // landed on the dashboard as Boris
-    expect(await screen.findByText('Acme Corp')).toBeInTheDocument();
+    expect((await screen.findAllByText('Acme Corp')).length).toBeGreaterThan(0);
     expect(screen.getByText('Boris Gerard')).toBeInTheDocument();
   });
 

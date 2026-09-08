@@ -1,42 +1,40 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { fetchApplications, logout, UnauthorizedError } from '../api/client';
-import type { ApplicationView } from '../api/types';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { fetchAnalytics, updateApplication } from '../api/client';
+import type { StaleApplication } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { useAssistantDrawer } from '../components/assistant/AssistantDrawerContext';
+import ErrorBanner from '../components/ErrorBanner';
+import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
+import { label } from '../components/StatusSelect';
+import { useToast } from '../components/Toast';
+import StatusFunnelChart from '../charts/StatusFunnelChart';
+import TimeInStageChart from '../charts/TimeInStageChart';
+import WeeklyApplicationsChart from '../charts/WeeklyApplicationsChart';
+import { useAsync } from '../hooks/useAsync';
+import { formatDateTime, relativeDays } from '../util/format';
+
+function percent(value: number | null | undefined): string {
+  return value === null || value === undefined ? '—' : `${Math.round(value * 100)}%`;
+}
+
+function daysText(value: number | null | undefined): string {
+  return value === null || value === undefined ? '—' : `${value} d`;
+}
 
 /**
- * The logged-in view: your personal intake address (forward confirmation
- * emails there and rows appear here) and your applications. The server
- * only ever returns the session owner's rows - this page just displays.
+ * The landing view: your intake address, the four numbers that matter,
+ * three charts, the applications that have gone quiet, and what changed
+ * recently. Everything comes from one call to /api/analytics/summary,
+ * computed server-side for the session account only.
  */
 export default function DashboardPage() {
-  const { me, setMe } = useAuth();
-  const [applications, setApplications] = useState<ApplicationView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { me } = useAuth();
+  const { notify } = useToast();
+  const assistant = useAssistantDrawer();
+  const { data, error, loading, reload, setData } = useAsync(fetchAnalytics);
   const [copied, setCopied] = useState(false);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    fetchApplications()
-      .then(setApplications)
-      .catch((e) => {
-        if (e instanceof UnauthorizedError) {
-          setMe(null);
-        } else {
-          setError('Could not load your applications. Refresh to try again.');
-        }
-      });
-  }, [setMe]);
-
-  async function onLogout() {
-    try {
-      await logout();
-    } finally {
-      setMe(null);
-      navigate('/login', { replace: true });
-    }
-  }
 
   async function copyIntakeAddress() {
     if (me?.intakeAddress) {
@@ -46,23 +44,47 @@ export default function DashboardPage() {
     }
   }
 
+  async function withdraw(app: StaleApplication) {
+    if (!data) return;
+    const index = data.stale.findIndex((s) => s.id === app.id);
+    setData((d) => (d ? { ...d, stale: d.stale.filter((s) => s.id !== app.id) } : d));
+    try {
+      await updateApplication(app.id, {
+        companyName: app.companyName,
+        positionTitle: app.positionTitle ?? null,
+        status: 'WITHDRAWN',
+        contactId: app.contactId ?? null,
+      });
+      notify(`${app.companyName} marked withdrawn`);
+      reload();
+    } catch {
+      // put this row back where it was; leave any other change alone
+      setData((d) => {
+        if (!d || d.stale.some((s) => s.id === app.id)) return d;
+        const stale = [...d.stale];
+        stale.splice(Math.min(index < 0 ? stale.length : index, stale.length), 0, app);
+        return { ...d, stale };
+      });
+      notify(`Could not update ${app.companyName}. Try again.`, 'error');
+    }
+  }
+
   return (
-    <main className="page">
-      <header className="topbar">
-        <h1>Resistance</h1>
-        <div className="topbar-right">
-          <span className="muted">{me?.fullName}</span>
-          <button className="link" onClick={onLogout}>
-            Log out
+    <>
+      <div className="page-title">
+        <h1>Dashboard</h1>
+        {me?.features?.assistant && (
+          <button type="button" className="btn" onClick={() => assistant.open()}>
+            Ask the assistant
           </button>
-        </div>
-      </header>
+        )}
+      </div>
 
       {me?.intakeAddress && (
         <section className="card intake">
           <h2>Your intake address</h2>
           <p className="muted">
-            Forward "we received your application" emails here — they show up below automatically.
+            Forward "we received your application" emails here — they show up automatically.
           </p>
           <p>
             <code>{me.intakeAddress}</code>{' '}
@@ -73,40 +95,92 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <section className="card">
-        <h2>Applications</h2>
-        {error && <p className="error">{error}</p>}
-        {!error && applications === null && <p className="muted">Loading…</p>}
-        {applications !== null && applications.length === 0 && (
-          <p className="muted">Nothing tracked yet. Forward a confirmation email to get started.</p>
-        )}
-        {applications !== null && applications.length > 0 && (
-          <table>
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Position</th>
-                <th>Status</th>
-                <th>Applied</th>
-                <th>Contact</th>
-              </tr>
-            </thead>
-            <tbody>
-              {applications.map((app) => (
-                <tr key={app.id}>
-                  <td>{app.companyName}</td>
-                  <td>{app.positionTitle ?? '—'}</td>
-                  <td>
-                    <StatusBadge status={app.status} />
-                  </td>
-                  <td>{app.appliedOn ?? '—'}</td>
-                  <td>{app.contactName ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-    </main>
+      {error && <ErrorBanner message={error} onRetry={reload} />}
+      {!error && loading && <p className="muted">Loading…</p>}
+
+      {data && data.total === 0 && (
+        <section className="card">
+          <p className="muted">Nothing tracked yet. Forward a confirmation email to get started, or</p>
+          <Link to="/applications" className="btn btn-primary">
+            add an application by hand
+          </Link>
+        </section>
+      )}
+
+      {data && data.total > 0 && (
+        <>
+          <div className="stats">
+            <StatCard label="Active" value={String(data.active)} hint={`of ${data.total} tracked`} />
+            <StatCard label="Response rate" value={percent(data.responseRate)} hint="heard back at all" />
+            <StatCard label="Offers" value={percent(data.offerRate)} hint="reached an offer" />
+            <StatCard
+              label="First response"
+              value={daysText(data.medianDaysToFirstResponse)}
+              hint="median wait for the first reply"
+            />
+          </div>
+
+          <StatusFunnelChart counts={data.countsByStatus} />
+
+          <div className="grid-2">
+            <WeeklyApplicationsChart weeks={data.weeklyApplications} />
+            <TimeInStageChart medians={data.medianDaysInStage} />
+          </div>
+
+          <div className="grid-2">
+            <section className="card">
+              <h2>Needs attention</h2>
+              <p className="muted small">Waiting, and nothing has happened for two weeks or more.</p>
+              {data.stale.length === 0 && <p className="muted">Nothing is going quiet. Nice.</p>}
+              {data.stale.length > 0 && (
+                <ul className="plain-list">
+                  {data.stale.map((s) => (
+                    <li key={s.id} className="attention-row">
+                      <div>
+                        <Link to={`/applications/${s.id}`}>{s.companyName}</Link>{' '}
+                        <span className="muted">{s.positionTitle ?? ''}</span>
+                        <div className="muted small">
+                          <StatusBadge status={s.status} /> · quiet for {s.daysSinceChange} days
+                        </div>
+                      </div>
+                      <button type="button" className="btn btn-ghost" onClick={() => withdraw(s)}>
+                        Mark withdrawn
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="card">
+              <h2>Recent activity</h2>
+              {data.recentActivity.length === 0 && <p className="muted">No changes yet.</p>}
+              <ul className="plain-list">
+                {data.recentActivity.map((a, i) => (
+                  <li key={i} className="activity-row">
+                    <div>
+                      <Link to={`/applications/${a.applicationId}`}>{a.companyName}</Link>{' '}
+                      {a.fromStatus ? (
+                        <>
+                          {label(a.fromStatus)} → <strong>{label(a.toStatus)}</strong>
+                        </>
+                      ) : (
+                        <>
+                          tracked as <strong>{label(a.toStatus)}</strong>
+                        </>
+                      )}
+                    </div>
+                    <div className="muted small">
+                      {formatDateTime(a.changedAt)} · {relativeDays(a.changedAt)} ·{' '}
+                      {a.source === 'INTAKE' ? 'from email' : 'by you'}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        </>
+      )}
+    </>
   );
 }

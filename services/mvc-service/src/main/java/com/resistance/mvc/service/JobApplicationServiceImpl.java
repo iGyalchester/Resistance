@@ -52,10 +52,9 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 	@Override
 	public void saveForOwner(JobApplication theJobApplication, int ownerId) {
 
-		// The form posts a contact id and StringToContactConverter resolves it
-		// with no request context, so a hand-edited dropdown value could
-		// otherwise attach another user's contact to your application. This is
-		// where that is refused.
+		// The API resolves a posted contactId through findByIdForOwner, but
+		// this is the boundary that must hold on its own: a contact that is
+		// not the caller's is refused here whoever attached it.
 		Contact contact = theJobApplication.getContact();
 		if (contact != null
 				&& (contact.getOwner() == null || contact.getOwner().getId() != ownerId)) {
@@ -72,8 +71,12 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 					.orElseThrow(() -> new IllegalArgumentException(
 							"Application " + theJobApplication.getId()
 									+ " does not belong to account " + ownerId));
-			previousStatus = existing.getStatus();
-			// the form doesn't carry these; keep what the row already has
+			// read the stored status with a query: "existing" may be the very
+			// instance the caller mutated (same persistence context), in which
+			// case its status is already the new one and no history would be kept
+			previousStatus = applicationRepository.findStatusById(existing.getId())
+					.orElse(existing.getStatus());
+			// the request doesn't carry these; keep what the row already has
 			theJobApplication.setAppliedAt(existing.getAppliedAt());
 		}
 
@@ -90,6 +93,12 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 
 		audit.emit("DATABASE_QUERY", isNew ? "CREATE" : "UPDATE", owner.getEmail(),
 				"job_application:" + saved.getId(), null);
+	}
+
+	@Override
+	public Optional<List<StatusHistory>> historyForOwner(int theId, int ownerId) {
+		return findByIdForOwner(theId, ownerId)
+				.map(app -> historyRepository.findByApplicationIdOrderByChangedAtAsc(app.getId()));
 	}
 
 	@Override

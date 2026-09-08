@@ -43,6 +43,10 @@ services:
       # optional AuditFlow integration (blank = off); see docs/E2E-TEST-PLAN.md
       TRACKER_AUDIT_URL: ${TRACKER_AUDIT_URL:-}
       TRACKER_AUDIT_TOKEN: ${TRACKER_AUDIT_TOKEN:-}
+      # optional in-app assistant (blank = feature hidden)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # comma-separated emails that get the Admin page (blank = nobody)
+      TRACKER_ADMIN_EMAILS: ${TRACKER_ADMIN_EMAILS:-}
     ports:
       - "8085:8085"
     depends_on:
@@ -74,6 +78,8 @@ services:
       # optional AuditFlow integration (blank = off); see docs/E2E-TEST-PLAN.md
       TRACKER_AUDIT_URL: ${TRACKER_AUDIT_URL:-}
       TRACKER_AUDIT_TOKEN: ${TRACKER_AUDIT_TOKEN:-}
+      # optional Claude fallback for emails the heuristics cannot parse
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8087:8087"
     depends_on:

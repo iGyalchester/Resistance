@@ -111,6 +111,12 @@ variable "intake_topic_arn" {
   type = string
 }
 
+variable "admin_emails" {
+  description = "Accounts (by email, case-insensitive) that get the ADMIN role at login and can open the ops view. Empty = no admins."
+  type        = list(string)
+  default     = []
+}
+
 variable "audit_url" {
   description = "AuditFlow ingestion URL (TRACKER_AUDIT_URL). Empty = auditing off."
   type        = string
@@ -124,7 +130,7 @@ variable "audit_token_secret_arn" {
 }
 
 variable "anthropic_api_key_secret_arn" {
-  description = "Secrets Manager secret (plain string) holding the Anthropic API key for Claude-backed parsing. Empty = heuristics only."
+  description = "Secrets Manager secret (plain string) holding the Anthropic API key, used by intake-service (Claude-backed parsing) and mvc-service (the assistant). Empty = both off."
   type        = string
   default     = ""
 }

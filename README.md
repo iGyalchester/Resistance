@@ -48,7 +48,7 @@ Resistance/
 │   ├── core-service/              Spring Core: DI, qualifiers, scopes, Java config (port 8081)
 │   ├── data-service/              JPA/Hibernate CRUD command-line demo (Contact)
 │   ├── security-service/          REST API + JDBC users/roles/bcrypt security (port 8084)
-│   ├── mvc-service/               Spring MVC + Thymeleaf application CRUD & forms (port 8085)
+│   ├── mvc-service/               The tracker: JSON API, OTP login, assistant, serves the React app (port 8085)
 │   ├── mvc-security-service/      MVC form login, roles, custom tables (port 8086)
 │   ├── advanced-data-service/     JPA advanced mappings CLI demo (1-1, 1-N, N-N)
 │   └── intake-service/            Email intake: webhook / AWS SES+SNS / IMAP (port 8087)
@@ -120,6 +120,11 @@ Full stack (MySQL, four web services, gateway):
 docker compose -f infrastructure/docker-compose.yml up --build
 ```
 
+The mvc-service image build now also installs Node and builds the React
+app, so it takes a few minutes longer the first time and needs outbound
+access to nodejs.org and registry.npmjs.org as well as Maven Central. The
+tracker is then at `http://localhost:8085`.
+
 The gateway then serves e.g. `http://localhost:8080/security/api/applications`.
 
 ## Email intake & passwordless login
@@ -177,25 +182,47 @@ login, `/dashboard` shows only your applications.
 
 ## React front end
 
-`frontend/` is a React 19 + TypeScript single-page app (Vite) covering the
-login flow and a read-only dashboard so far. It talks to a JSON API in
-mvc-service (`/api/auth/*`, `/api/applications`) that reuses the exact same
-OTP service, throttles, session auth, and owner-scoping as the Thymeleaf
-pages — the two UIs run side by side until the React app reaches parity.
+`frontend/` is a React 19 + TypeScript single-page app (Vite), and it is
+the whole UI: mvc-service bundles the built app into its jar and serves it
+at `http://localhost:8085` alongside the JSON API (`/api/**`) it talks to.
+The server-rendered pages it grew up next to are gone; every screen below
+is React.
+
+Screens so far:
+
+| Route | What |
+|---|---|
+| `/login`, `/login/code` | passwordless login |
+| `/dashboard` | your intake address, four headline numbers, pipeline / weekly / time-in-stage charts, what has gone quiet, recent activity |
+| `/applications` | search, status chips, sortable columns, change a status in place, add |
+| `/applications/:id` | details, the status timeline (email vs. manual changes), edit, delete |
+| `/contacts` | your address book with how many applications reference each contact |
+| `/profile` | name and phone; email is read-only |
+| `/assistant` (and the drawer) | chat about your own applications; suggested changes are cards you apply or dismiss; off without `ANTHROPIC_API_KEY` |
+| `/help` | the FAQ, each entry with an "Ask the assistant" link |
+| `/admin` | admins only: accounts, applications, activity per day, login-flow and assistant counters, the accounts list |
+
+Every signed-in page sits inside one shell (navigation, who is logged in,
+log out). Saves confirm with a short toast; an in-place status change is
+applied immediately and rolled back with a message if the server refuses.
 
 ```bash
-# terminal 1: the backend (needs MySQL, see "Running locally")
-mvn -pl services/mvc-service -am spring-boot:run
+# the built app: Maven installs Node, builds the frontend, and bakes it in
+mvn -pl services/mvc-service -am spring-boot:run      # http://localhost:8085
+mvn ... -Dfrontend.skip=true                          # backend only (no UI), faster
 
-# terminal 2: the frontend with hot reload
+# working on the UI: hot reload, /api proxied to the backend on :8085
 cd frontend
 npm install
-npm run dev          # http://localhost:5173, /api proxied to :8085
+npm run dev          # http://localhost:5173
 ```
 
 `npm run build` type-checks (`tsc`) and produces static files in
 `frontend/dist/`; `npm test` runs the Vitest + React Testing Library suite.
-CI builds and tests the frontend in its own job.
+CI builds and tests the frontend in its own job, and the Maven job bundles
+it into the jar the way the Deploy workflow does. Any app route works on a
+reload or a bookmark (`/applications/42` returns the shell and React picks
+the page); only `/api/**` needs a session.
 
 | Endpoint | What |
 |---|---|
@@ -203,7 +230,60 @@ CI builds and tests the frontend in its own job.
 | `POST /api/auth/login` | Verify the code; authenticates the session, returns the user |
 | `GET /api/auth/me` | Who is logged in (401 when nobody) |
 | `POST /api/auth/logout` | End the session |
-| `GET /api/applications` | The session owner's applications |
+| `GET /api/applications` | The session owner's applications; `?status=` and `?q=` filter |
+| `GET /api/applications/{id}` | One application with its contact id and status timeline |
+| `POST /api/applications` | Create (`companyName`, `status` required; `contactId` must be your own; `appliedOn` optional) |
+| `PUT /api/applications/{id}` | Update; a status change is recorded in the timeline |
+| `DELETE /api/applications/{id}` | Delete (history rows go with it) |
+| `GET /api/applications/{id}/history` | The timeline alone |
+| `GET/POST/PUT/DELETE /api/contacts[/{id}]` | Your address book, with how many applications reference each contact |
+| `GET /api/profile`, `PUT /api/profile` | Name and phone (email is identity, read-only) |
+| `GET /api/analytics/summary` | The dashboard's numbers, computed server-side from your applications and status history |
+| `POST /api/assistant/messages` | Ask the assistant; answers as a server-sent event stream (`delta`, `action`, `done` / `error`) |
+| `DELETE /api/assistant/conversation` | Forget the chat history kept on your session |
+| `GET /api/help` | The Help page's questions and answers (public) |
+| `GET /api/admin/overview`, `GET /api/admin/accounts` | Admins only (`403 forbidden` otherwise): deployment-wide aggregates and the accounts list; every read is audited |
+
+Errors have one shape: `{"error":"<code>"}`, plus a `fields` map naming each
+invalid field on `validation`. A row that is not yours is a `404 not_found`,
+exactly like one that does not exist, so ids cannot be probed. `GET
+/api/auth/me` also reports `roles` and `features` (which optional parts of
+the app this deployment has switched on).
+
+**The assistant.** With `ANTHROPIC_API_KEY` set on mvc-service the app
+gains a chat that answers from *your* applications and the FAQ, and
+suggests changes ("Withdraw Acme?") as cards you confirm; the model never
+writes to the database itself. Without the key the drawer and its buttons are
+hidden and the Assistant page says it is not configured.
+A typical exchange:
+
+> **You:** Which applications should I follow up on?
+> **Assistant:** Acme Corp (Backend Engineer) has been sitting in Applied
+> for 19 days with no reply; everything else moved in the last week. Want
+> me to mark it withdrawn, or draft a nudge?
+> **You:** Withdraw it.
+> **Assistant:** *[card: Mark Acme Corp as Withdrawn — Apply / Dismiss]*
+> Confirm the card above and the timeline will record it.
+
+Words appear as the model produces them (a server-sent event stream), the
+chat opens as a drawer on any page or as a full page, and "New
+conversation" forgets the history kept on your session.
+Knobs live under `tracker.ai.*` (model `claude-opus-5`, effort, 30 messages
+per hour per account, history caps). The design - grounding, prompt-injection
+posture, why proposals instead of writes - is explained in
+[docs/TECH-GUIDE.md](docs/TECH-GUIDE.md#the-assistant-streaming-chat-grounded-in-your-own-data).
+
+**HTTPS.** Behind the AWS load balancer the qa profile sets
+`tracker.security.hsts=true`, so browsers that have reached the site over
+https refuse to go back to http for a year; dev is plain http and sends no
+such header.
+
+**Admins.** Set `TRACKER_ADMIN_EMAILS` (comma-separated; Terraform's
+`admin_emails`) and those accounts get the `ADMIN` role at their next
+login, the Admin link in the app, and `/api/admin/**`. Everyone else is a
+plain user. The page shows aggregates and per-process counters (they reset
+on restart - it says so); why a config list rather than a role column is
+in the TECH-GUIDE.
 
 Auth is the session cookie itself — no tokens. CSRF tokens ride in the
 readable `XSRF-TOKEN` cookie and come back as an `X-XSRF-TOKEN` header;

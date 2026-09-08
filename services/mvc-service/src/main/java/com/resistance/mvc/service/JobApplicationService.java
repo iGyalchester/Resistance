@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.resistance.shared.models.entity.JobApplication;
+import com.resistance.shared.models.entity.StatusHistory;
 
 /**
  * Owner-scoped: every operation takes the acting account's id and only
@@ -19,5 +20,12 @@ public interface JobApplicationService {
 	void saveForOwner(JobApplication theJobApplication, int ownerId);
 
 	boolean deleteByIdForOwner(int theId, int ownerId);
+
+	/**
+	 * The status transitions of one of the owner's applications, oldest
+	 * first. Empty Optional when the application is not theirs (or gone) -
+	 * history is never looked up by id alone.
+	 */
+	Optional<List<StatusHistory>> historyForOwner(int theId, int ownerId);
 
 }
