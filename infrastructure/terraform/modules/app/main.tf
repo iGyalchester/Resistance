@@ -268,6 +268,7 @@ locals {
       { name = "SMTP_PORT", value = "587" },
       { name = "OTP_FROM_ADDRESS", value = var.otp_from_address },
       { name = "INTAKE_ADDRESS", value = var.intake_address },
+      { name = "TRACKER_ADMIN_EMAILS", value = join(",", var.admin_emails) },
     ]
     intake-service = [
       { name = "INTAKE_AWS_TOPIC_ARN", value = var.intake_topic_arn },

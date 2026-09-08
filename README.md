@@ -195,6 +195,7 @@ Screens so far:
 | `/profile` | name and phone; email is read-only |
 | `/assistant` (and the drawer) | chat about your own applications; suggested changes are cards you apply or dismiss; off without `ANTHROPIC_API_KEY` |
 | `/help` | the FAQ, each entry with an "Ask the assistant" link |
+| `/admin` | admins only: accounts, applications, activity per day, login-flow and assistant counters, the accounts list |
 
 Every signed-in page sits inside one shell (navigation, who is logged in,
 log out). Saves confirm with a short toast; an in-place status change is
@@ -232,6 +233,7 @@ CI builds and tests the frontend in its own job.
 | `POST /api/assistant/messages` | Ask the assistant; answers as a server-sent event stream (`delta`, `action`, `done` / `error`) |
 | `DELETE /api/assistant/conversation` | Forget the chat history kept on your session |
 | `GET /api/help` | The Help page's questions and answers (public) |
+| `GET /api/admin/overview`, `GET /api/admin/accounts` | Admins only (`403 forbidden` otherwise): deployment-wide aggregates and the accounts list; every read is audited |
 
 Errors have one shape: `{"error":"<code>"}`, plus a `fields` map naming each
 invalid field on `validation`. A row that is not yours is a `404 not_found`,
@@ -260,6 +262,13 @@ Knobs live under `tracker.ai.*` (model `claude-opus-5`, effort, 30 messages
 per hour per account, history caps). The design - grounding, prompt-injection
 posture, why proposals instead of writes - is explained in
 [docs/TECH-GUIDE.md](docs/TECH-GUIDE.md#the-assistant-streaming-chat-grounded-in-your-own-data).
+
+**Admins.** Set `TRACKER_ADMIN_EMAILS` (comma-separated; Terraform's
+`admin_emails`) and those accounts get the `ADMIN` role at their next
+login, the Admin link in the app, and `/api/admin/**`. Everyone else is a
+plain user. The page shows aggregates and per-process counters (they reset
+on restart - it says so); why a config list rather than a role column is
+in the TECH-GUIDE.
 
 Auth is the session cookie itself — no tokens. CSRF tokens ride in the
 readable `XSRF-TOKEN` cookie and come back as an `X-XSRF-TOKEN` header;

@@ -3,6 +3,7 @@ package com.resistance.mvc.dao;
 import com.resistance.shared.models.entity.StatusHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.Instant;
 import java.util.List;
 
 public interface StatusHistoryRepository extends JpaRepository<StatusHistory, Integer> {
@@ -12,4 +13,7 @@ public interface StatusHistoryRepository extends JpaRepository<StatusHistory, In
 
     /** Every transition across one account's applications, oldest first - the analytics feed. */
     List<StatusHistory> findByApplicationOwnerIdOrderByChangedAtAsc(int ownerId);
+
+    /** Every transition across all accounts since an instant - the admin view's activity feed. */
+    List<StatusHistory> findByChangedAtAfterOrderByChangedAtAsc(Instant since);
 }

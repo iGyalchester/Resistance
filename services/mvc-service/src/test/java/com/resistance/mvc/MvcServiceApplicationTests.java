@@ -1,9 +1,14 @@
 package com.resistance.mvc;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -11,6 +16,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class MvcServiceApplicationTests {
@@ -52,6 +62,55 @@ class MvcServiceApplicationTests {
 
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(response.body()).contains("\"status\"");
+	}
+
+	/**
+	 * The admin rule through the real filter chain: anonymous callers get
+	 * the API's JSON 401, a signed-in USER gets a JSON 403, and only an
+	 * ADMIN reaches the controller. The roles are stamped straight onto the
+	 * request (spring-security-test) because the OTP flow cannot be driven
+	 * from a test without reading the mailbox.
+	 */
+	@Nested
+	class AdminRule {
+
+		@Autowired
+		private WebApplicationContext context;
+
+		private MockMvc mockMvc;
+
+		@BeforeEach
+		void setUp() {
+			mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+		}
+
+		@Test
+		void anonymousIs401Json() throws Exception {
+			mockMvc.perform(get("/api/admin/overview"))
+					.andExpect(status().isUnauthorized())
+					.andExpect(jsonPath("$.error").value("unauthenticated"));
+		}
+
+		@Test
+		void userIs403Json() throws Exception {
+			mockMvc.perform(get("/api/admin/overview").with(user("boris@example.com").roles("USER")))
+					.andExpect(status().isForbidden())
+					.andExpect(jsonPath("$.error").value("forbidden"));
+		}
+
+		@Test
+		void adminIs200() throws Exception {
+			mockMvc.perform(get("/api/admin/overview").with(user("ops@example.com").roles("USER", "ADMIN")))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.accounts").isNumber())
+					.andExpect(jsonPath("$.intakeEventsLast30Days.length()").value(30));
+		}
+
+		@Test
+		void helpIsPublicAndOtherApiStaysAuthenticated() throws Exception {
+			mockMvc.perform(get("/api/help")).andExpect(status().isOk());
+			mockMvc.perform(get("/api/applications")).andExpect(status().isUnauthorized());
+		}
 	}
 
 	/**

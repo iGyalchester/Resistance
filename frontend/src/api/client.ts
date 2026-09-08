@@ -1,5 +1,7 @@
 import { SseParser } from './sse';
 import type {
+  AdminAccount,
+  AdminOverview,
   AnalyticsView,
   ApplicationDetailView,
   ApplicationRequest,
@@ -216,4 +218,14 @@ export function resetAssistant(): Promise<void> {
 
 export function fetchHelp(): Promise<FaqEntry[]> {
   return request('/api/help');
+}
+
+// --- admin --------------------------------------------------------------
+
+export function fetchAdminOverview(): Promise<AdminOverview> {
+  return request('/api/admin/overview');
+}
+
+export function fetchAdminAccounts(): Promise<AdminAccount[]> {
+  return request('/api/admin/accounts');
 }

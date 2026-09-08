@@ -1,5 +1,6 @@
 package com.resistance.mvc.api;
 
+import com.resistance.mvc.auth.AuthMetrics;
 import com.resistance.mvc.auth.LoginController;
 import com.resistance.mvc.auth.OtpRequestThrottle;
 import com.resistance.mvc.auth.OtpService;
@@ -48,6 +49,7 @@ public class AuthApiController {
     private final String intakeBaseAddress;
     private final AuditEventClient audit;
     private final MeView.Features features;
+    private final AuthMetrics metrics;
 
     public AuthApiController(OtpService otpService,
                              SessionAuthenticator sessionAuthenticator,
@@ -56,8 +58,10 @@ public class AuthApiController {
                              UserAccountRepository accountRepository,
                              @Value("${tracker.intake.address:track@resistance.example}") String intakeBaseAddress,
                              AuditEventClient auditEventClient,
-                             @Value("${tracker.ai.api-key:}") String assistantApiKey) {
+                             @Value("${tracker.ai.api-key:}") String assistantApiKey,
+                             AuthMetrics authMetrics) {
         this.otpService = otpService;
+        this.metrics = authMetrics;
         this.sessionAuthenticator = sessionAuthenticator;
         this.emailThrottle = emailOtpThrottle;
         this.ipThrottle = ipOtpThrottle;
@@ -85,9 +89,11 @@ public class AuthApiController {
 
         boolean allowed = emailThrottle.tryAcquire("email:" + email.toLowerCase())
                 && ipThrottle.tryAcquire("ip:" + request.getRemoteAddr());
+        metrics.otpRequested();
         if (allowed) {
             otpService.requestCode(email);
         } else {
+            metrics.otpThrottled();
             log.warn("OTP request throttled for {}", request.getRemoteAddr());
         }
 
@@ -108,12 +114,14 @@ public class AuthApiController {
 
         Optional<UserAccount> account = otpService.verify(email, code);
         if (account.isEmpty()) {
+            metrics.loginFailure();
             audit.emit("AUTH_EVENT", "LOGIN_FAILURE", email.toLowerCase(),
                     "login", request.getRemoteAddr());
             return ResponseEntity.badRequest().body(Map.of("error", "invalid_code"));
         }
 
         sessionAuthenticator.establish(account.get(), request, response);
+        metrics.loginSuccess();
         audit.emit("AUTH_EVENT", "LOGIN_SUCCESS", account.get().getEmail(),
                 "login", request.getRemoteAddr());
         return ResponseEntity.ok(MeView.of(account.get(), intakeBaseAddress, currentRoles(), features));

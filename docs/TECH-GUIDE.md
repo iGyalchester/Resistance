@@ -501,6 +501,52 @@ the assistant and the Help page can never disagree.
 `FakeAssistantModel` stands in for the API; one live test runs only when
 `ANTHROPIC_API_KEY` is set).
 
+### Roles and the admin view
+
+**What:** every signed-in account is `ROLE_USER`. Accounts whose email is
+on the `tracker.admin.emails` list (env `TRACKER_ADMIN_EMAILS`, comma
+separated, case-insensitive; Terraform's `admin_emails`) are also
+`ROLE_ADMIN`, which is what `/api/admin/**` and the Admin page require.
+**Why a list in configuration and not a column?** A deployment with two
+admins does not need an admin-management screen, and a config value is
+easier to audit than a table: to know who can see everyone's accounts,
+read the tfvars. `SessionAuthenticator` asks `AdminRoles` for the
+authorities at login, so a change to the list takes effect at the next
+login; a `role` column can replace the list later without touching the
+callers. `GET /api/auth/me` reports the roles, and the React shell shows
+the Admin link only when `ADMIN` is among them - a convenience, not the
+control: the control is `SecurityConfig`'s `hasRole("ADMIN")` rule (a
+plain user gets `403 {"error":"forbidden"}` from the API) and the
+controller's own check on top of it, so the rule holds even in a test
+with no filter chain.
+**What the page shows.** Aggregates only: accounts, applications, the
+share of applications the parser found no title for (a rising number
+means the heuristics are missing a new email format), status changes per
+day for 30 days split into "from email" and "by hand" (is intake flowing,
+are people using the tracker), and two groups of **counters**: the login
+flow (codes requested, requests the throttle refused, logins, failed
+codes) and the assistant (messages, tokens, refusals, errors, throttled).
+The accounts table lists email, name, application count, last activity
+and whether an intake alias exists - never the phone, never the alias
+itself (knowing an alias is what authorizes filing into that account).
+Every admin read is audited under the admin's email (`FILE_ACCESS /
+ADMIN_OVERVIEW`, `ADMIN_ACCOUNTS`).
+**What the counters are not.** They are Micrometer counters in this
+process's memory: they start at zero on every restart and, with several
+ECS tasks, each task counts its own share; the page prints the start time
+so nobody reads them as totals. They exist to spot a brute-force attempt,
+a broken email path or a runaway assistant bill at a glance; durable
+history is what the audit trail and CloudWatch are for. The assistant's
+"estimated cost" multiplies tokens by two constants in
+`frontend/src/pages/admin/pricing.ts` and prints the rates it assumed; it
+is a glance, not an invoice.
+**Where:** `auth/AdminRoles.java`, `auth/AuthMetrics.java`,
+`auth/SecurityConfig.java`, `admin/AdminService.java` (the arithmetic,
+table-tested), `api/AdminApiController.java`, `frontend/src/pages/AdminPage.tsx`,
+`frontend/src/charts/ActivityPerDayChart.tsx`; the role rule through the
+real filter chain is in `MvcServiceApplicationTests.AdminRule` (CI, needs
+MySQL).
+
 ### Vitest + React Testing Library
 
 **What:** the frontend's JUnit. Vitest runs the tests; React Testing
