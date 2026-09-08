@@ -16,7 +16,7 @@ describe('dashboard', () => {
     expect(await screen.findByText('track+boris2k4mp9@resistance.example')).toBeInTheDocument();
     expect(await screen.findByText('Acme Corp')).toBeInTheDocument();
     expect(screen.getByText('Backend Engineer')).toBeInTheDocument();
-    expect(screen.getByText('INTERVIEW')).toBeInTheDocument();
+    expect(screen.getByText('Interview')).toBeInTheDocument();
     expect(screen.getByText('Dana Reyes')).toBeInTheDocument();
     // nulls render as em dashes, not "null"
     expect(screen.queryByText('null')).not.toBeInTheDocument();

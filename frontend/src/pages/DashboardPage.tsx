@@ -1,42 +1,22 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { fetchApplications, logout, UnauthorizedError } from '../api/client';
-import type { ApplicationView } from '../api/types';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { fetchApplications } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import ErrorBanner from '../components/ErrorBanner';
 import StatusBadge from '../components/StatusBadge';
+import { useAsync } from '../hooks/useAsync';
+import { formatDate } from '../util/format';
 
 /**
- * The logged-in view: your personal intake address (forward confirmation
- * emails there and rows appear here) and your applications. The server
- * only ever returns the session owner's rows - this page just displays.
+ * The landing view: your personal intake address (forward confirmation
+ * emails there and rows appear here) and your applications at a glance.
+ * The server only ever returns the session owner's rows - this page just
+ * displays. Charts and metrics arrive in the next slice.
  */
 export default function DashboardPage() {
-  const { me, setMe } = useAuth();
-  const [applications, setApplications] = useState<ApplicationView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { me } = useAuth();
+  const { data: applications, error, loading, reload } = useAsync(fetchApplications);
   const [copied, setCopied] = useState(false);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    fetchApplications()
-      .then(setApplications)
-      .catch((e) => {
-        if (e instanceof UnauthorizedError) {
-          setMe(null);
-        } else {
-          setError('Could not load your applications. Refresh to try again.');
-        }
-      });
-  }, [setMe]);
-
-  async function onLogout() {
-    try {
-      await logout();
-    } finally {
-      setMe(null);
-      navigate('/login', { replace: true });
-    }
-  }
 
   async function copyIntakeAddress() {
     if (me?.intakeAddress) {
@@ -47,16 +27,8 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="page">
-      <header className="topbar">
-        <h1>Resistance</h1>
-        <div className="topbar-right">
-          <span className="muted">{me?.fullName}</span>
-          <button className="link" onClick={onLogout}>
-            Log out
-          </button>
-        </div>
-      </header>
+    <>
+      <h1>Dashboard</h1>
 
       {me?.intakeAddress && (
         <section className="card intake">
@@ -74,9 +46,14 @@ export default function DashboardPage() {
       )}
 
       <section className="card">
-        <h2>Applications</h2>
-        {error && <p className="error">{error}</p>}
-        {!error && applications === null && <p className="muted">Loading…</p>}
+        <div className="card-title">
+          <h2>Applications</h2>
+          <Link to="/applications" className="btn btn-ghost">
+            Manage
+          </Link>
+        </div>
+        {error && <ErrorBanner message={error} onRetry={reload} />}
+        {!error && loading && <p className="muted">Loading…</p>}
         {applications !== null && applications.length === 0 && (
           <p className="muted">Nothing tracked yet. Forward a confirmation email to get started.</p>
         )}
@@ -94,12 +71,14 @@ export default function DashboardPage() {
             <tbody>
               {applications.map((app) => (
                 <tr key={app.id}>
-                  <td>{app.companyName}</td>
+                  <td>
+                    <Link to={`/applications/${app.id}`}>{app.companyName}</Link>
+                  </td>
                   <td>{app.positionTitle ?? '—'}</td>
                   <td>
                     <StatusBadge status={app.status} />
                   </td>
-                  <td>{app.appliedOn ?? '—'}</td>
+                  <td>{formatDate(app.appliedOn)}</td>
                   <td>{app.contactName ?? '—'}</td>
                 </tr>
               ))}
@@ -107,6 +86,6 @@ export default function DashboardPage() {
           </table>
         )}
       </section>
-    </main>
+    </>
   );
 }
