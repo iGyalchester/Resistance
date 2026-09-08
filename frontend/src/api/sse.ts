@@ -12,16 +12,25 @@ export class SseParser {
 
   /** Feed one chunk of text; returns every complete event it finished. */
   push(chunk: string): AssistantEvent[] {
-    this.buffer += chunk.replace(/\r\n/g, '\n');
-    const events: AssistantEvent[] = [];
-    let end = this.buffer.indexOf('\n\n');
-    while (end >= 0) {
-      const block = this.buffer.slice(0, end);
-      this.buffer = this.buffer.slice(end + 2);
-      const event = parseBlock(block);
-      if (event) events.push(event);
-      end = this.buffer.indexOf('\n\n');
+    this.buffer += chunk;
+    // normalise CRLF (and a lone CR) to LF, but hold back a trailing CR:
+    // its LF may be the first byte of the next chunk
+    let text = this.buffer;
+    let carry = '';
+    if (text.endsWith('\r')) {
+      carry = '\r';
+      text = text.slice(0, -1);
     }
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const events: AssistantEvent[] = [];
+    let end = text.indexOf('\n\n');
+    while (end >= 0) {
+      const event = parseBlock(text.slice(0, end));
+      if (event) events.push(event);
+      text = text.slice(end + 2);
+      end = text.indexOf('\n\n');
+    }
+    this.buffer = text + carry;
     return events;
   }
 }

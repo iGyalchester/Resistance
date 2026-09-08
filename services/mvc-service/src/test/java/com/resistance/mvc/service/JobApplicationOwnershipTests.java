@@ -58,6 +58,7 @@ class JobApplicationOwnershipTests {
         theirs.setId(42);
         theirs.setOwner(someoneElse);
         when(applications.findById(42)).thenReturn(Optional.of(theirs));
+        when(applications.findStatusById(42)).thenReturn(Optional.of(ApplicationStatus.APPLIED));
         when(accounts.findById(anyInt())).thenAnswer(inv ->
                 (int) inv.getArgument(0) == 1 ? Optional.of(me) : Optional.of(someoneElse));
     }
@@ -157,6 +158,25 @@ class JobApplicationOwnershipTests {
         assertEquals(ApplicationStatus.APPLIED, recorded.getValue().getFromStatus());
         assertEquals(ApplicationStatus.INTERVIEW, recorded.getValue().getToStatus());
         assertEquals(StatusHistory.SOURCE_MANUAL, recorded.getValue().getSource());
+    }
+
+    /**
+     * The API loads the managed entity, mutates it and saves that same
+     * instance. The persistence context then returns the mutated object for
+     * the "existing" lookup too, so the previous status must come from the
+     * database, not from the object in hand.
+     */
+    @Test
+    void statusChangeOnTheSameManagedInstanceIsStillRecorded() {
+        theirs.setStatus(ApplicationStatus.INTERVIEW); // findById now returns this very object
+
+        service.saveForOwner(theirs, 2);
+
+        org.mockito.ArgumentCaptor<StatusHistory> recorded =
+                org.mockito.ArgumentCaptor.forClass(StatusHistory.class);
+        verify(history).save(recorded.capture());
+        assertEquals(ApplicationStatus.APPLIED, recorded.getValue().getFromStatus());
+        assertEquals(ApplicationStatus.INTERVIEW, recorded.getValue().getToStatus());
     }
 
     @Test

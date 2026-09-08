@@ -1,6 +1,6 @@
 package com.resistance.mvc.api;
 
-import com.resistance.mvc.auth.LoginController;
+import com.resistance.mvc.auth.SessionAuthenticator;
 import com.resistance.mvc.service.ContactService;
 import com.resistance.mvc.service.JobApplicationService;
 import com.resistance.shared.models.entity.ApplicationStatus;
@@ -81,7 +81,7 @@ class ApplicationApiControllerTests {
 
     @Test
     void listReturnsOnlyTheSessionOwnersApplicationsAsFlatViews() throws Exception {
-        mockMvc.perform(get("/api/applications").sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+        mockMvc.perform(get("/api/applications").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].companyName").value("Acme Corp"))
@@ -99,20 +99,20 @@ class ApplicationApiControllerTests {
     @Test
     void listFiltersByStatusAndSearchText() throws Exception {
         mockMvc.perform(get("/api/applications").param("status", "applied")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].companyName").value("Globex"));
 
         mockMvc.perform(get("/api/applications").param("q", "backend")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].companyName").value("Acme Corp"));
 
         // an unknown status name matches nothing rather than everything
         mockMvc.perform(get("/api/applications").param("status", "bogus")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
     }
@@ -128,7 +128,7 @@ class ApplicationApiControllerTests {
 
     @Test
     void detailCarriesTheContactIdAndTheTimelineOldestFirst() throws Exception {
-        mockMvc.perform(get("/api/applications/1").sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+        mockMvc.perform(get("/api/applications/1").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.contactId").value(3))
@@ -149,16 +149,16 @@ class ApplicationApiControllerTests {
         when(applicationService.historyForOwner(42, ME)).thenReturn(Optional.empty());
         when(applicationService.deleteByIdForOwner(42, ME)).thenReturn(false);
 
-        mockMvc.perform(get("/api/applications/42").sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+        mockMvc.perform(get("/api/applications/42").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("not_found"));
-        mockMvc.perform(get("/api/applications/42/history").sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+        mockMvc.perform(get("/api/applications/42/history").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isNotFound());
         mockMvc.perform(put("/api/applications/42").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"companyName\":\"X\",\"status\":\"APPLIED\"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(delete("/api/applications/42").sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+        mockMvc.perform(delete("/api/applications/42").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isNotFound());
 
         verify(applicationService, never()).saveForOwner(any(), anyInt());
@@ -179,7 +179,7 @@ class ApplicationApiControllerTests {
         mockMvc.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"companyName\":\"  Initech \",\"positionTitle\":\"\",\"status\":\"SCREENING\","
                                 + "\"contactId\":3,\"appliedOn\":\"2026-08-12\"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(5))
                 .andExpect(jsonPath("$.companyName").value("Initech"))
@@ -203,7 +203,7 @@ class ApplicationApiControllerTests {
 
         mockMvc.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"companyName\":\"Initech\",\"status\":\"APPLIED\",\"contactId\":99}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isNotFound());
 
         verify(applicationService, never()).saveForOwner(any(), anyInt());
@@ -213,7 +213,7 @@ class ApplicationApiControllerTests {
     void invalidBodiesAre400WithTheOffendingFields() throws Exception {
         mockMvc.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"companyName\":\"   \",\"positionTitle\":\"" + "x".repeat(91) + "\"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("validation"))
                 .andExpect(jsonPath("$.fields.companyName").value("required"))
@@ -223,7 +223,7 @@ class ApplicationApiControllerTests {
         // a status name that is not one of ours never reaches validation
         mockMvc.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"companyName\":\"Initech\",\"status\":\"HIRED\"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("bad_request"));
 
@@ -235,7 +235,7 @@ class ApplicationApiControllerTests {
         mockMvc.perform(put("/api/applications/1").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"companyName\":\"Acme Corp\",\"positionTitle\":\"Staff Engineer\","
                                 + "\"status\":\"OFFER\",\"contactId\":null}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("OFFER"))
                 .andExpect(jsonPath("$.positionTitle").value("Staff Engineer"))
@@ -250,7 +250,7 @@ class ApplicationApiControllerTests {
     void deleteAnswers204ForAnOwnedRow() throws Exception {
         when(applicationService.deleteByIdForOwner(1, ME)).thenReturn(true);
 
-        mockMvc.perform(delete("/api/applications/1").sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+        mockMvc.perform(delete("/api/applications/1").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isNoContent());
     }
 
@@ -264,5 +264,12 @@ class ApplicationApiControllerTests {
 
         verify(applicationService, never()).saveForOwner(any(), anyInt());
         verify(applicationService, never()).deleteByIdForOwner(anyInt(), anyInt());
+    }
+
+    @Test
+    void nonNumericIdIsABadRequestNotAServerError() throws Exception {
+        mockMvc.perform(get("/api/applications/abc").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("bad_request"));
     }
 }

@@ -3,6 +3,7 @@ package com.resistance.mvc.api;
 import com.resistance.mvc.assistant.AssistantDisabledException;
 import com.resistance.mvc.assistant.AssistantListener;
 import com.resistance.mvc.assistant.AssistantService;
+import com.resistance.mvc.assistant.ClientGoneException;
 import com.resistance.mvc.assistant.Conversation;
 import com.resistance.mvc.assistant.Proposal;
 import jakarta.servlet.http.HttpSession;
@@ -25,6 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The chat endpoint. A message goes in as JSON; the reply comes back as a
@@ -73,8 +75,14 @@ public class AssistantApiController {
         }
         Conversation conversation = conversation(session);
         SseEmitter emitter = new SseEmitter(TIMEOUT_MILLIS);
-        emitter.onTimeout(emitter::complete);
-        executor.execute(() -> assistant.reply(accountId, conversation, body.message().trim(), new Events(emitter)));
+        Events events = new Events(emitter);
+        emitter.onTimeout(() -> {
+            events.closed.set(true);
+            emitter.complete();
+        });
+        emitter.onCompletion(() -> events.closed.set(true));
+        emitter.onError(e -> events.closed.set(true));
+        executor.execute(() -> assistant.reply(accountId, conversation, body.message().trim(), events));
         return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(emitter);
     }
 
@@ -100,10 +108,16 @@ public class AssistantApiController {
         }
     }
 
-    /** Listener → SSE. Every payload is serialized here so the wire shape is one place. */
+    /**
+     * Listener → SSE. Every payload is serialized here so the wire shape is
+     * one place. Once the emitter is done (client gone, timed out, failed)
+     * the next delta throws ClientGoneException, which unwinds the model
+     * stream instead of buying tokens nobody will read.
+     */
     private final class Events implements AssistantListener {
 
         private final SseEmitter emitter;
+        final AtomicBoolean closed = new AtomicBoolean(false);
 
         Events(SseEmitter emitter) {
             this.emitter = emitter;
@@ -111,6 +125,9 @@ public class AssistantApiController {
 
         @Override
         public void onDelta(String text) {
+            if (closed.get()) {
+                throw new ClientGoneException();
+            }
             send("delta", Map.of("text", text));
         }
 
@@ -135,8 +152,9 @@ public class AssistantApiController {
             try {
                 emitter.send(SseEmitter.event().name(name).data(json.writeValueAsString(payload), MediaType.APPLICATION_JSON));
             } catch (IOException | IllegalStateException e) {
-                // the browser went away mid-answer; nothing to do but stop
+                // the browser went away mid-answer; the next delta stops the reply
                 log.debug("SSE send failed ({}), client gone", e.getMessage());
+                closed.set(true);
                 emitter.completeWithError(e);
             }
         }

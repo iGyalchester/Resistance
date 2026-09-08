@@ -47,8 +47,8 @@ export default function ApplicationsPage() {
   }
 
   async function changeStatus(app: ApplicationView, next: ApplicationStatus) {
-    const previous = data ?? [];
-    setData(previous.map((a) => (a.id === app.id ? { ...a, status: next } : a)));
+    const before = app.status ?? null;
+    setData((list) => (list ?? []).map((a) => (a.id === app.id ? { ...a, status: next } : a)));
     try {
       await updateApplication(app.id, {
         companyName: app.companyName,
@@ -58,9 +58,14 @@ export default function ApplicationsPage() {
       });
       notify(`${app.companyName} moved to ${label(next)}`);
     } catch {
-      setData(previous);
+      // roll back this row only; another row's change may have landed meanwhile
+      setData((list) => (list ?? []).map((a) => (a.id === app.id ? { ...a, status: before } : a)));
       notify(`Could not update ${app.companyName}. Try again.`, 'error');
     }
+  }
+
+  function ariaSort(key: SortKey): 'ascending' | 'descending' | undefined {
+    return sort.key === key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined;
   }
 
   async function openAdd() {
@@ -121,18 +126,18 @@ export default function ApplicationsPage() {
           <table>
             <thead>
               <tr>
-                <th>
+                <th aria-sort={ariaSort('companyName')}>
                   <button type="button" className="sort" onClick={() => toggleSort('companyName')}>
                     Company
                   </button>
                 </th>
                 <th>Position</th>
-                <th>
+                <th aria-sort={ariaSort('status')}>
                   <button type="button" className="sort" onClick={() => toggleSort('status')}>
                     Status
                   </button>
                 </th>
-                <th>
+                <th aria-sort={ariaSort('appliedOn')}>
                   <button type="button" className="sort" onClick={() => toggleSort('appliedOn')}>
                     Applied
                   </button>

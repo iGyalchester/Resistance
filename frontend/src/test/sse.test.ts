@@ -34,6 +34,12 @@ describe('SseParser', () => {
     expect(parser.push('event: delta\r\ndata: {"text":"x"}\r\n\r\n')).toEqual([{ type: 'delta', text: 'x' }]);
   });
 
+  it('handles a CRLF pair split across two chunks', () => {
+    const parser = new SseParser();
+    expect(parser.push('event:delta\r\ndata:{"text":"x"}\r')).toEqual([]);
+    expect(parser.push('\n\r\n')).toEqual([{ type: 'delta', text: 'x' }]);
+  });
+
   it('ignores comments, unknown events, and unparsable data', () => {
     const parser = new SseParser();
     expect(parser.push(':keep-alive\n\nevent:mystery\ndata:{}\n\nevent:delta\ndata:not json\n\n')).toEqual([]);

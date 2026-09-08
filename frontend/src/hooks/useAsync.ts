@@ -46,7 +46,13 @@ export function useAsync<T>(load: () => Promise<T>, deps: unknown[] = []) {
   }, [...deps, tick, setMe]);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  const setData = useCallback((data: T | null) => setState((s) => ({ ...s, data })), []);
+  // an updater form, like useState's, so a rollback can touch one row
+  // without clobbering another change that landed in the meantime
+  const setData = useCallback(
+    (update: T | null | ((current: T | null) => T | null)) =>
+      setState((s) => ({ ...s, data: typeof update === 'function' ? (update as (c: T | null) => T | null)(s.data) : update })),
+    [],
+  );
 
   return { ...state, reload, setData };
 }

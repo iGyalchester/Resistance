@@ -195,6 +195,24 @@ class AssistantServiceTests {
     }
 
     @Test
+    void aClientThatWentAwayStopsTheReplyQuietly() {
+        model.then(FakeAssistantModel.answer("a long answer nobody will read"));
+        AssistantListener gone = new RecordingListener() {
+            @Override
+            public void onDelta(String delta) {
+                throw new ClientGoneException();
+            }
+        };
+
+        service.reply(OWNER, conversation, "hi", gone);
+
+        assertThat(conversation.turns()).isEmpty();
+        assertThat(((RecordingListener) gone).events).isEmpty();
+        assertThat(meters.counter("assistant.errors").count()).isZero();
+        assertThat(meters.counter("assistant.messages").count()).isEqualTo(1); // it was started, and throttled as such
+    }
+
+    @Test
     void unexpectedFailureIsInternal() {
         model.thenThrow(new IllegalStateException("bug"));
 

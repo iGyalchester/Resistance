@@ -17,7 +17,7 @@ export default function AssistantDrawer({ open, prefill, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape' && !event.defaultPrevented) onClose();
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);

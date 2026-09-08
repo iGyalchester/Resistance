@@ -1,7 +1,6 @@
 package com.resistance.mvc.api;
 
 import com.resistance.mvc.auth.AuthMetrics;
-import com.resistance.mvc.auth.LoginController;
 import com.resistance.mvc.auth.OtpRequestThrottle;
 import com.resistance.mvc.auth.OtpService;
 import com.resistance.mvc.auth.SessionAuthenticator;
@@ -30,9 +29,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The JSON twin of LoginController for the React app: same OtpService,
- * same throttles, same SessionAuthenticator, same session cookie - only
- * the wire format differs. Code requests always answer identically
+ * The login flow for the React app: OtpService issues and verifies the
+ * emailed codes, the throttles cap requests, SessionAuthenticator turns a
+ * verified account into the session cookie. Code requests always answer identically
  * (throttled or not, known account or not) so nothing is enumerable.
  */
 @RestController
@@ -40,6 +39,7 @@ import java.util.Optional;
 public class AuthApiController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthApiController.class);
+    static final int MAX_EMAIL_LENGTH = 254;
 
     private final OtpService otpService;
     private final SessionAuthenticator sessionAuthenticator;
@@ -86,9 +86,15 @@ public class AuthApiController {
         if (email.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "email_required"));
         }
+        if (email.length() > MAX_EMAIL_LENGTH) {
+            // longer than any real address; also keeps throttle keys bounded
+            return ResponseEntity.badRequest().body(Map.of("error", "email_invalid"));
+        }
 
-        boolean allowed = emailThrottle.tryAcquire("email:" + email.toLowerCase())
-                && ipThrottle.tryAcquire("ip:" + request.getRemoteAddr());
+        // the IP bucket first: it is the one an anonymous caller cannot vary,
+        // so a flood of made-up addresses never gets to grow the email map
+        boolean allowed = ipThrottle.tryAcquire("ip:" + request.getRemoteAddr())
+                && emailThrottle.tryAcquire("email:" + email.toLowerCase());
         metrics.otpRequested();
         if (allowed) {
             otpService.requestCode(email);
@@ -129,7 +135,7 @@ public class AuthApiController {
 
     @GetMapping("/me")
     public ResponseEntity<Object> me(HttpSession session) {
-        Integer accountId = (Integer) session.getAttribute(LoginController.SESSION_ACCOUNT_ID);
+        Integer accountId = (Integer) session.getAttribute(SessionAuthenticator.SESSION_ACCOUNT_ID);
         UserAccount account = accountId == null ? null
                 : accountRepository.findById(accountId).orElse(null);
         if (account == null) {

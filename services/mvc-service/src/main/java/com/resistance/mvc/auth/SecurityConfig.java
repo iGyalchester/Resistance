@@ -1,30 +1,31 @@
 package com.resistance.mvc.auth;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.AuthenticationEntryPoint;
-import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
-import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 
 /**
- * Everything except the login flow requires an authenticated session.
- * Authentication itself is our OTP flow (LoginController and
- * AuthApiController store the authenticated context via
- * SessionAuthenticator). Two clients share this chain: the Thymeleaf
- * pages and the React app. CSRF tokens therefore live in a cookie the
- * React app can read (see SpaCsrfTokenRequestHandler) - Thymeleaf still
- * injects the request-attribute token into every th:action form.
- * Anonymous browsers get redirected to /login; anonymous /api/** calls
- * get a 401 JSON body instead, which the React client turns into its
- * own login redirect.
+ * Who may call what. The React shell (index.html and its assets) is
+ * public: it contains nothing but the app's code, and the app decides
+ * on its own whether to show the login screen. Everything that carries
+ * data is under /api/** and needs an authenticated session, established
+ * by the OTP flow in AuthApiController through SessionAuthenticator;
+ * /api/admin/** needs the ADMIN role on top. Anonymous and forbidden
+ * calls get JSON bodies, never an HTML redirect - the client turns them
+ * into its own navigation.
+ *
+ * CSRF stays on with a token the JavaScript can read (see
+ * SpaCsrfTokenRequestHandler). HSTS is opt-in per profile
+ * (tracker.security.hsts): behind the AWS load balancer the qa profile
+ * turns it on, the plain-http dev profile leaves it off.
  */
 @Configuration
 public class SecurityConfig {
@@ -36,17 +37,18 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
-                                           SecurityContextRepository securityContextRepository) throws Exception {
+                                           SecurityContextRepository securityContextRepository,
+                                           @Value("${tracker.security.hsts:false}") boolean hsts) throws Exception {
 
         http.authorizeHttpRequests(configurer ->
                 configurer
-                        .requestMatchers("/login", "/login/**", "/logout", "/css/**", "/error").permitAll()
-                        // the load balancer's health check; reports only UP/DOWN
-                        .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/api/auth/code", "/api/auth/login", "/api/help").permitAll()
                         // the ops view: signed in is not enough, the account must be on the admin list
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .anyRequest().authenticated()
+                        .requestMatchers("/api/**").authenticated()
+                        // the load balancer's health check (reports only UP/DOWN), the
+                        // shell, its assets, and the app's own routes
+                        .anyRequest().permitAll()
         );
 
         http.csrf(csrf -> csrf
@@ -58,22 +60,25 @@ public class SecurityConfig {
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write("{\"error\":\"unauthenticated\"}");
         };
-        // a signed-in user without the role: JSON for the API, plain 403 elsewhere
         AccessDeniedHandler api403 = (request, response, exception) -> {
-            if (request.getRequestURI().startsWith("/api/")) {
-                response.setStatus(403);
-                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                response.getWriter().write("{\"error\":\"forbidden\"}");
-            } else {
-                response.sendError(403);
-            }
+            response.setStatus(403);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write("{\"error\":\"forbidden\"}");
         };
         http.exceptionHandling(handling -> handling
-                .accessDeniedHandler(api403)
-                .defaultAuthenticationEntryPointFor(api401,
-                        PathPatternRequestMatcher.withDefaults().matcher("/api/**"))
-                .defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login"),
-                        AnyRequestMatcher.INSTANCE));
+                .authenticationEntryPoint(api401)
+                .accessDeniedHandler(api403));
+
+        // Strict-Transport-Security tells the browser to insist on https for
+        // a year. Sent only on https requests (behind the ALB that means the
+        // forwarded scheme) and only when the profile asks for it.
+        http.headers(headers -> headers.httpStrictTransportSecurity(policy -> {
+            if (hsts) {
+                policy.maxAgeInSeconds(31_536_000).includeSubDomains(true);
+            } else {
+                policy.disable();
+            }
+        }));
 
         // our controllers do login/logout themselves
         http.formLogin(form -> form.disable());

@@ -27,9 +27,8 @@ import java.util.Optional;
 
 /**
  * Applications for the React app. Owner-scoping lives in the services -
- * this controller only supplies the session account id, exactly like the
- * Thymeleaf controllers do, and turns "not yours" into a 404 that is
- * indistinguishable from "does not exist".
+ * this controller only supplies the session account id and turns "not
+ * yours" into a 404 that is indistinguishable from "does not exist".
  */
 @RestController
 @RequestMapping("/api/applications")

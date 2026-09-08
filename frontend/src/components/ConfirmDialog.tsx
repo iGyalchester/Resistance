@@ -30,10 +30,10 @@ export default function ConfirmDialog({ title, message, confirmLabel = 'Delete',
       <p>{message}</p>
       {error && <p className="error">{error}</p>}
       <div className="actions">
-        <button type="button" className="btn" onClick={onClose} disabled={busy}>
+        <button type="button" className="btn" onClick={onClose} disabled={busy} autoFocus>
           Cancel
         </button>
-        <button type="button" className="btn btn-danger" onClick={confirm} disabled={busy} autoFocus>
+        <button type="button" className="btn btn-danger" onClick={confirm} disabled={busy}>
           {busy ? 'Working…' : confirmLabel}
         </button>
       </div>

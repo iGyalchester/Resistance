@@ -88,7 +88,7 @@ describe('assistant client', () => {
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual({ message: 'hi' });
     expect((init.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('tok123');
-    expect((init.headers as Record<string, string>)['Accept']).toBe('text/event-stream');
+    expect((init.headers as Record<string, string>)['Accept']).toBe('text/event-stream, application/json');
     vi.unstubAllGlobals();
   });
 

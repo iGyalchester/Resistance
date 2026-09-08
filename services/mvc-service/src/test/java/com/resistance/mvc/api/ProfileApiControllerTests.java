@@ -1,6 +1,6 @@
 package com.resistance.mvc.api;
 
-import com.resistance.mvc.auth.LoginController;
+import com.resistance.mvc.auth.SessionAuthenticator;
 import com.resistance.mvc.dao.UserAccountRepository;
 import com.resistance.shared.models.entity.UserAccount;
 import com.resistance.shared.utils.audit.AuditEventClient;
@@ -50,7 +50,7 @@ class ProfileApiControllerTests {
 
     @Test
     void readingTheProfileIsAuditedBecauseItHoldsThePhone() throws Exception {
-        mockMvc.perform(get("/api/profile").sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))
+        mockMvc.perform(get("/api/profile").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fullName").value("Boris Gerard"))
                 .andExpect(jsonPath("$.email").value("boris@gmail.com"))
@@ -63,7 +63,7 @@ class ProfileApiControllerTests {
     void updateChangesNameAndPhoneAndIsAudited() throws Exception {
         mockMvc.perform(put("/api/profile").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"fullName\":\" Boris G. \",\"phone\":\"  \"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fullName").value("Boris G."))
                 .andExpect(jsonPath("$.phone").doesNotExist());
@@ -79,7 +79,7 @@ class ProfileApiControllerTests {
     void blankNameIs400AndNothingIsSaved() throws Exception {
         mockMvc.perform(put("/api/profile").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"fullName\":\"\"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields.fullName").value("required"));
 

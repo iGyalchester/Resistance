@@ -1,6 +1,6 @@
 package com.resistance.mvc.api;
 
-import com.resistance.mvc.auth.LoginController;
+import com.resistance.mvc.auth.SessionAuthenticator;
 import com.resistance.mvc.service.ContactService;
 import com.resistance.mvc.service.JobApplicationService;
 import com.resistance.shared.models.entity.ApplicationStatus;
@@ -72,7 +72,7 @@ class ContactApiControllerTests {
 
     @Test
     void listCountsTheOwnersApplicationsPerContact() throws Exception {
-        mockMvc.perform(get("/api/contacts").sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+        mockMvc.perform(get("/api/contacts").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].firstName").value("Marcus"))
@@ -102,7 +102,7 @@ class ContactApiControllerTests {
 
         mockMvc.perform(post("/api/contacts").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"firstName\":\" Sam \",\"lastName\":\"\",\"email\":\"sam@initech.example\"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(9))
                 .andExpect(jsonPath("$.firstName").value("Sam"))
@@ -119,7 +119,7 @@ class ContactApiControllerTests {
     void invalidContactIs400WithFieldNames() throws Exception {
         mockMvc.perform(post("/api/contacts").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"firstName\":\"\",\"email\":\"not-an-email\"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("validation"))
                 .andExpect(jsonPath("$.fields.firstName").value("required"))
@@ -135,10 +135,10 @@ class ContactApiControllerTests {
 
         mockMvc.perform(put("/api/contacts/42").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"firstName\":\"X\"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("not_found"));
-        mockMvc.perform(delete("/api/contacts/42").sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+        mockMvc.perform(delete("/api/contacts/42").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isNotFound());
 
         verify(contactService, never()).saveForOwner(any(), anyInt());
@@ -150,13 +150,13 @@ class ContactApiControllerTests {
 
         mockMvc.perform(put("/api/contacts/3").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"firstName\":\"Dana\",\"lastName\":\"Reyes-Ortiz\",\"email\":\"dana@acme.com\"}")
-                        .sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+                        .sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lastName").value("Reyes-Ortiz"))
                 .andExpect(jsonPath("$.applicationCount").value(2));
         verify(contactService).saveForOwner(dana, ME);
 
-        mockMvc.perform(delete("/api/contacts/3").sessionAttr(LoginController.SESSION_ACCOUNT_ID, ME))
+        mockMvc.perform(delete("/api/contacts/3").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, ME))
                 .andExpect(status().isNoContent());
         verify(contactService).deleteByIdForOwner(3, ME);
     }

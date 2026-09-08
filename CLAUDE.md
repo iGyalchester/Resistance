@@ -9,7 +9,8 @@ rewritten. The core product idea: forward a "we received your
 application" email to your personal intake address (`track+<alias>@domain`)
 and the tracker parses it, files it under your auto-provisioned account,
 and follows the status over time. Login is passwordless (emailed one-time
-codes). A React dashboard is growing alongside the original Thymeleaf UI.
+codes). The UI is a React app that mvc-service builds and serves; the
+original Thymeleaf pages have been retired.
 
 **Read `docs/TECH-GUIDE.md` first** — a plain-language tour of every
 technology in the stack, kept current by convention (see below).
@@ -44,8 +45,9 @@ technology in the stack, kept current by convention (see below).
 
 ## Map
 
-- `services/mvc-service` (8085) — the real app: Thymeleaf pages **and**
-  the `/api/**` JSON API for React; OTP auth, session security,
+- `services/mvc-service` (8085) — the real app: the `/api/**` JSON API
+  and the built React app it serves (`config/SpaConfig`, `frontend` Maven
+  profile, `-Dfrontend.skip=true` for backend-only runs); OTP auth, session security,
   owner-scoping at the service layer, CSRF (cookie repo for the SPA);
   `assistant/` is the Claude-backed chat (SSE, grounded prompt, proposals
   that never write; on only when `ANTHROPIC_API_KEY` is set); `admin/` +
@@ -68,9 +70,10 @@ technology in the stack, kept current by convention (see below).
 
 ## Roadmap
 
-React slices remaining: application/contact CRUD → status-history
-timeline view → profile page + shipping the built app in docker-compose,
-then decide on retiring Thymeleaf.
+The React front end v2 plan (`docs/plans/FRONTEND-V2.md`) is built: full
+CRUD, dashboards, the assistant, the admin view, and the SPA served from
+mvc-service with Thymeleaf retired. Next candidates: a role column when
+admins need managing in-app, SMS OTP, the production DB decision.
 
 **Built since this list was written**: CD via GitHub OIDC→ECS is done
 (`infrastructure/terraform` + the Deploy workflow, which pushes

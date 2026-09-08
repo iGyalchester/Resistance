@@ -1,6 +1,6 @@
 package com.resistance.mvc.api;
 
-import com.resistance.mvc.auth.LoginController;
+import com.resistance.mvc.auth.SessionAuthenticator;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +19,7 @@ final class ApiSessions {
 
     /** The session's account id, or null when nobody is logged in. */
     static Integer accountId(HttpSession session) {
-        return (Integer) session.getAttribute(LoginController.SESSION_ACCOUNT_ID);
+        return (Integer) session.getAttribute(SessionAuthenticator.SESSION_ACCOUNT_ID);
     }
 
     static <T> ResponseEntity<T> unauthorized() {
