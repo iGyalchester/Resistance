@@ -281,6 +281,42 @@ forwards `/api/**` to mvc-service on 8085, so the browser talks to *one*
 origin — no CORS configuration, and the session cookie flows naturally.
 **Where:** `frontend/vite.config.ts`, scripts in `frontend/package.json`.
 
+### Pages, the shell, and what a click does
+
+**Layout route.** `App.tsx` nests every signed-in page under one parent
+route whose element is `RequireAuth` wrapping `AppShell`. The shell renders
+the navigation and an `<Outlet/>`, which is React Router's "put the child
+route here" slot - so the topbar is written once and every page just
+renders its own content. Anonymous visitors never reach the shell; the
+guard sends them to `/login` first.
+**Loading data.** `hooks/useAsync.ts` is the one pattern every page uses:
+give it a fetch function, get back `data`, `loading`, `error`, a
+`reload()` to call after a save, and `setData()` for optimistic updates. A
+401 from anywhere logs the user out (the guard then redirects); anything
+else becomes a banner with a Retry button.
+**Optimistic updates.** Changing a status from the applications list
+updates the row *before* the server answers, then sends the whole
+`ApplicationRequest`. If the server refuses, the previous list is put back
+and a toast explains - the page never lies for longer than one round trip.
+**Dialogs and toasts.** `components/Dialog.tsx` is a plain div with
+`role="dialog"` and `aria-modal`, closed by Escape or the backdrop; forms
+inside it focus their first field. `components/Toast.tsx` is a tiny
+context whose `notify()` shows a message for four seconds in an
+`aria-live` region, so screen readers hear "Saved" without losing their
+place. Both are deliberately hand-written: at this size a library would be
+more code to read than these two files.
+**Validation twice.** Forms check the required fields locally for an
+instant answer, then show whatever the server's `fields` map says - the
+field names match on both sides, so a server message lands under the
+right input.
+**Tests.** Each page has a Vitest file that renders the whole app at a
+route with fetch stubbed (`test/helpers.tsx`), clicks through it with
+`user-event`, and asserts the exact JSON that was sent. `setup.ts`
+unmounts between tests; without that every render would stack up.
+**Where:** `components/AppShell.tsx`, `hooks/useAsync.ts`,
+`pages/ApplicationsPage.tsx`, `pages/ApplicationDetailPage.tsx`,
+`components/forms/`, `test/*.test.tsx`.
+
 ### The JSON API the SPA talks to
 
 **What:** `@RestController` classes in `mvc-service/.../api/` — same

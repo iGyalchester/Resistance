@@ -177,11 +177,26 @@ login, `/dashboard` shows only your applications.
 
 ## React front end
 
-`frontend/` is a React 19 + TypeScript single-page app (Vite) covering the
-login flow and a read-only dashboard so far. It talks to a JSON API in
-mvc-service (`/api/auth/*`, `/api/applications`) that reuses the exact same
-OTP service, throttles, session auth, and owner-scoping as the Thymeleaf
-pages — the two UIs run side by side until the React app reaches parity.
+`frontend/` is a React 19 + TypeScript single-page app (Vite). It talks to
+the JSON API in mvc-service (`/api/**`) that reuses the exact same OTP
+service, throttles, session auth, and owner-scoping as the Thymeleaf pages;
+the two UIs run side by side until the React app is served by mvc-service
+and Thymeleaf is retired (see `docs/plans/FRONTEND-V2.md`).
+
+Screens so far:
+
+| Route | What |
+|---|---|
+| `/login`, `/login/code` | passwordless login |
+| `/dashboard` | your intake address and applications at a glance |
+| `/applications` | search, status chips, sortable columns, change a status in place, add |
+| `/applications/:id` | details, the status timeline (email vs. manual changes), edit, delete |
+| `/contacts` | your address book with how many applications reference each contact |
+| `/profile` | name and phone; email is read-only |
+
+Every signed-in page sits inside one shell (navigation, who is logged in,
+log out). Saves confirm with a short toast; an in-place status change is
+applied immediately and rolled back with a message if the server refuses.
 
 ```bash
 # terminal 1: the backend (needs MySQL, see "Running locally")

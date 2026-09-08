@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchApplications, login, UnauthorizedError } from '../api/client';
+import { ApiError, createApplication, fetchApplications, login, UnauthorizedError } from '../api/client';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -47,5 +47,20 @@ describe('api client', () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'invalid_code' }, 400)));
 
     await expect(login('b@x', '000000')).rejects.toThrow('invalid_code');
+  });
+
+  it('carries the per-field messages of a validation failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ error: 'validation', fields: { companyName: 'required' } }, 400)),
+    );
+
+    const error = await createApplication({ companyName: '', positionTitle: null, status: 'APPLIED', contactId: null })
+      .then(() => null)
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(400);
+    expect(error.message).toBe('validation');
+    expect(error.fields).toEqual({ companyName: 'required' });
   });
 });
