@@ -3,7 +3,7 @@ package com.resistance.mvc.util;
 /**
  * Builds the personal intake address shown to a user:
  * "track@domain" + alias "a8f3k2xq99" -> "track+a8f3k2xq99@domain".
- * Shared by the Thymeleaf dashboard and the JSON API.
+ * Used wherever the address is shown or reported (the JSON API, the OTP mail).
  */
 public final class IntakeAddresses {
 

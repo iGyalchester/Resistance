@@ -47,6 +47,9 @@ jobs:
         docker logs mysql
         exit 1
 
+    # mvc-service's "frontend" Maven profile installs Node, builds the
+    # React app and bundles it into the jar here, exactly as Deploy does;
+    # the frontend job below is the faster UI-only signal.
     - name: Build, test, and package all modules
       run: mvn -B clean verify
 

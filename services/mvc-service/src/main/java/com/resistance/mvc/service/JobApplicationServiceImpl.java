@@ -52,10 +52,9 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 	@Override
 	public void saveForOwner(JobApplication theJobApplication, int ownerId) {
 
-		// The form posts a contact id and StringToContactConverter resolves it
-		// with no request context, so a hand-edited dropdown value could
-		// otherwise attach another user's contact to your application. This is
-		// where that is refused.
+		// The API resolves a posted contactId through findByIdForOwner, but
+		// this is the boundary that must hold on its own: a contact that is
+		// not the caller's is refused here whoever attached it.
 		Contact contact = theJobApplication.getContact();
 		if (contact != null
 				&& (contact.getOwner() == null || contact.getOwner().getId() != ownerId)) {

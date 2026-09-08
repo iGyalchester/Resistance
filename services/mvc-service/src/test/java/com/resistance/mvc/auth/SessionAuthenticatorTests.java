@@ -1,6 +1,5 @@
 package com.resistance.mvc.auth;
 
-import com.resistance.mvc.auth.LoginController;
 import com.resistance.shared.models.entity.UserAccount;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +39,7 @@ class SessionAuthenticatorTests {
 
         assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities())
                 .extracting(GrantedAuthority::getAuthority).containsExactly("ROLE_USER", "ROLE_ADMIN");
-        assertThat(request.getSession(false).getAttribute(LoginController.SESSION_ACCOUNT_ID)).isEqualTo(7);
+        assertThat(request.getSession(false).getAttribute(SessionAuthenticator.SESSION_ACCOUNT_ID)).isEqualTo(7);
         verify(repository).saveContext(any(), any(), any());
     }
 

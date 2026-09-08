@@ -21,6 +21,8 @@
 		     every AWS artifact on one version -->
 		<awssdk.version>2.28.29</awssdk.version>
 		<anthropic.version>2.34.0</anthropic.version>
+		<frontend-maven-plugin.version>1.15.1</frontend-maven-plugin.version>
+		<node.version>v22.12.0</node.version>
 	</properties>
 
 	<modules>

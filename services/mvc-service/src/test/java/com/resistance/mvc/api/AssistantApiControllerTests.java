@@ -4,7 +4,7 @@ import com.resistance.mvc.assistant.AssistantListener;
 import com.resistance.mvc.assistant.AssistantService;
 import com.resistance.mvc.assistant.Conversation;
 import com.resistance.mvc.assistant.Proposal;
-import com.resistance.mvc.auth.LoginController;
+import com.resistance.mvc.auth.SessionAuthenticator;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
@@ -39,7 +39,7 @@ class AssistantApiControllerTests {
 
     private MockHttpSession loggedIn() {
         MockHttpSession session = new MockHttpSession();
-        session.setAttribute(LoginController.SESSION_ACCOUNT_ID, 7);
+        session.setAttribute(SessionAuthenticator.SESSION_ACCOUNT_ID, 7);
         return session;
     }
 

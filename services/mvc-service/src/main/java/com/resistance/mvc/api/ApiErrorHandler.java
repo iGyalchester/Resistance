@@ -16,8 +16,8 @@ import java.util.Map;
 /**
  * One error shape for every /api endpoint, so the React client has a
  * single thing to parse: {"error": "<code>"} plus, for validation, a
- * "fields" map of field -> message. Only the api package is covered; the
- * Thymeleaf controllers keep Spring's default error page.
+ * "fields" map of field -> message. Scoped to the api package so a
+ * missing static file still gets Spring's plain 404.
  */
 @RestControllerAdvice(basePackageClasses = ApiErrorHandler.class)
 public class ApiErrorHandler {

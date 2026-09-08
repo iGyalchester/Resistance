@@ -32,22 +32,48 @@ class MvcServiceApplicationTests {
 	void contextLoads() {
 	}
 
+	private HttpResponse<String> fetch(String path, String... headers) throws Exception {
+		HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET();
+		for (int i = 0; i < headers.length; i += 2) {
+			request.header(headers[i], headers[i + 1]);
+		}
+		return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+				.send(request.build(), HttpResponse.BodyHandlers.ofString());
+	}
+
 	/**
-	 * "/" used to serve a course demo: an applicant registration form with
-	 * no connection to the tracker, on the one URL a visitor is most likely
-	 * to type. It now redirects to the dashboard, which for an anonymous
-	 * caller means the security chain sends them on to /login.
+	 * The React shell is the whole UI now: "/" serves it, and so does any
+	 * app route the browser might reload on (including an old server-rendered
+	 * URL, which must not 404 for a bookmark). The build bundles the app
+	 * through the frontend Maven profile, which is why this runs in CI only.
 	 */
 	@Test
-	void rootRedirectsRatherThanServingADemoForm() throws Exception {
-		HttpResponse<Void> response = HttpClient.newBuilder()
-				.followRedirects(HttpClient.Redirect.NEVER).build()
-				.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/")).GET().build(),
-						HttpResponse.BodyHandlers.discarding());
+	void rootAndAppRoutesServeTheShell() throws Exception {
+		for (String path : new String[] {"/", "/dashboard", "/applications/42", "/applications/list", "/help"}) {
+			HttpResponse<String> response = fetch(path);
+			assertThat(response.statusCode()).as(path).isEqualTo(200);
+			assertThat(response.body()).as(path).contains("<div id=\"root\">");
+		}
+	}
 
-		assertThat(response.statusCode()).isEqualTo(302);
-		assertThat(response.headers().firstValue("Location").orElseThrow())
-				.doesNotContain("applicant");
+	@Test
+	void missingAssetsAre404NotTheShell() throws Exception {
+		assertThat(fetch("/assets/nope.js").statusCode()).isEqualTo(404);
+		assertThat(fetch("/favicon.ico").statusCode()).isEqualTo(404);
+	}
+
+	@Test
+	void apiStaysAuthenticatedWithJsonAnswers() throws Exception {
+		HttpResponse<String> response = fetch("/api/applications");
+		assertThat(response.statusCode()).isEqualTo(401);
+		assertThat(response.body()).isEqualTo("{\"error\":\"unauthenticated\"}");
+	}
+
+	/** dev has no HSTS: it is plain http, and a stray header would poison localhost for a year. */
+	@Test
+	void noStrictTransportSecurityByDefault() throws Exception {
+		HttpResponse<String> response = fetch("/actuator/health", "X-Forwarded-Proto", "https");
+		assertThat(response.headers().firstValue("Strict-Transport-Security")).isEmpty();
 	}
 
 	/**
@@ -115,33 +141,42 @@ class MvcServiceApplicationTests {
 
 	/**
 	 * What the qa profile turns on. The ALB terminates TLS and forwards
-	 * plain HTTP, so without forward-headers-strategy every redirect to
-	 * /login would send the browser to http:// - off the certificate and,
-	 * on a HSTS domain, into an error page. Nested so the local build's
-	 * "!MvcServiceApplicationTests" exclusion still covers it: like its
-	 * parent it needs a real MySQL and runs in CI.
+	 * plain HTTP, so without forward-headers-strategy the app would think
+	 * every request is http: cookies would miss the Secure flag and HSTS
+	 * would never be sent. With it, a request the balancer marks as https
+	 * is secure to Spring Security, and the HSTS header (qa only, via
+	 * tracker.security.hsts) goes out; a plain request still gets none.
+	 * Nested so the local build's "!MvcServiceApplicationTests" exclusion
+	 * still covers it: like its parent it needs a real MySQL and runs in CI.
 	 */
 	@Nested
 	@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-			properties = "server.forward-headers-strategy=native")
+			properties = {"server.forward-headers-strategy=native", "tracker.security.hsts=true"})
 	class ForwardedHeaders {
 
 		@Value("${local.server.port}")
 		private int forwardedPort;
 
-		@Test
-		void redirectsHonourForwardedProto() throws Exception {
-			HttpResponse<Void> response = HttpClient.newBuilder()
-					.followRedirects(HttpClient.Redirect.NEVER).build()
-					.send(HttpRequest.newBuilder(
-									URI.create("http://localhost:" + forwardedPort + "/dashboard"))
-							.header("X-Forwarded-Proto", "https")
-							.GET().build(),
-							HttpResponse.BodyHandlers.discarding());
+		private HttpResponse<String> health(String... headers) throws Exception {
+			HttpRequest.Builder request = HttpRequest.newBuilder(
+					URI.create("http://localhost:" + forwardedPort + "/actuator/health")).GET();
+			for (int i = 0; i < headers.length; i += 2) {
+				request.header(headers[i], headers[i + 1]);
+			}
+			return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+		}
 
-			assertThat(response.statusCode()).isEqualTo(302);
-			assertThat(response.headers().firstValue("Location").orElseThrow())
-					.startsWith("https://");
+		@Test
+		void forwardedHttpsGetsStrictTransportSecurity() throws Exception {
+			HttpResponse<String> response = health("X-Forwarded-Proto", "https");
+			assertThat(response.statusCode()).isEqualTo(200);
+			assertThat(response.headers().firstValue("Strict-Transport-Security").orElseThrow())
+					.contains("max-age=31536000").contains("includeSubDomains");
+		}
+
+		@Test
+		void plainHttpGetsNone() throws Exception {
+			assertThat(health().headers().firstValue("Strict-Transport-Security")).isEmpty();
 		}
 	}
 

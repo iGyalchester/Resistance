@@ -1,6 +1,5 @@
 package com.resistance.mvc.api;
 
-import com.resistance.mvc.auth.LoginController;
 import com.resistance.mvc.auth.OtpRequestThrottle;
 import com.resistance.mvc.auth.OtpService;
 import com.resistance.mvc.auth.SessionAuthenticator;
@@ -103,7 +102,7 @@ class AuthApiControllerTests {
                 .andReturn();
 
         assertEquals(7, result.getRequest().getSession()
-                .getAttribute(LoginController.SESSION_ACCOUNT_ID));
+                .getAttribute(SessionAuthenticator.SESSION_ACCOUNT_ID));
     }
 
     @Test
@@ -117,14 +116,14 @@ class AuthApiControllerTests {
                 .andReturn();
 
         assertEquals(null, result.getRequest().getSession()
-                .getAttribute(LoginController.SESSION_ACCOUNT_ID));
+                .getAttribute(SessionAuthenticator.SESSION_ACCOUNT_ID));
     }
 
     @Test
     void meReturnsTheSessionAccount() throws Exception {
         when(accounts.findById(7)).thenReturn(Optional.of(boris));
 
-        mockMvc.perform(get("/api/auth/me").sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))
+        mockMvc.perform(get("/api/auth/me").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("boris@gmail.com"))
                 .andExpect(jsonPath("$.intakeAddress").value("track+boris2k4mp9@resistance.example"));
@@ -137,7 +136,7 @@ class AuthApiControllerTests {
                 controller(new SessionAuthenticator(new HttpSessionSecurityContextRepository(), new com.resistance.mvc.auth.AdminRoles("")), "sk-test"))
                 .build();
 
-        withKey.perform(get("/api/auth/me").sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))
+        withKey.perform(get("/api/auth/me").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.features.assistant").value(true))
                 .andExpect(jsonPath("$.roles[0]").value("USER"));
@@ -152,7 +151,7 @@ class AuthApiControllerTests {
 
     @Test
     void logoutInvalidatesTheSession() throws Exception {
-        mockMvc.perform(post("/api/auth/logout").sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))
+        mockMvc.perform(post("/api/auth/logout").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
                 .andExpect(status().isNoContent());
     }
 }
