@@ -32,3 +32,7 @@ output "ses_rule_set_name" {
   description = "Put in each environment's terraform.tfvars as ses_rule_set_name."
   value       = aws_ses_receipt_rule_set.this.rule_set_name
 }
+output "github_actions_plan_role_arn" {
+  description = "Set as the AWS_PLAN_ROLE_ARN repository variable. Pull-request plans assume this instead of the deploy role."
+  value       = aws_iam_role.github_actions_plan.arn
+}
