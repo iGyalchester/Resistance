@@ -167,6 +167,9 @@ dist/
 
 # provider binaries and module cache; the lock file IS committed
 **/.terraform/*
+# TF_DATA_DIR=.terraform-<env>, so several environments can stay
+# initialised side by side out of the single stack/ root
+**/.terraform-*/
 *.tfstate
 *.tfstate.*
 *.tfstate.backup

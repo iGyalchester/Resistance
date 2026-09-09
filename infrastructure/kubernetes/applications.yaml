@@ -4,42 +4,6 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rest-api-service
-  namespace: resistance
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: rest-api-service
-  template:
-    metadata:
-      labels:
-        app: rest-api-service
-    spec:
-      containers:
-        - name: rest-api-service
-          image: resistance/rest-api-service:latest
-          ports:
-            - containerPort: 8083
-          env:
-            - name: DB_HOST
-              value: mysql
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: rest-api-service
-  namespace: resistance
-spec:
-  selector:
-    app: rest-api-service
-  ports:
-    - port: 8083
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
   name: security-service
   namespace: resistance
 spec:
@@ -144,38 +108,6 @@ spec:
     app: mvc-security-service
   ports:
     - port: 8086
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-gateway
-  namespace: resistance
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: api-gateway
-  template:
-    metadata:
-      labels:
-        app: api-gateway
-    spec:
-      containers:
-        - name: api-gateway
-          image: resistance/api-gateway:latest
-          ports:
-            - containerPort: 8080
-          env:
-            - name: DB_HOST
-              value: mysql
-            - name: REST_API_SERVICE_HOST
-              value: rest-api-service
-            - name: SECURITY_SERVICE_HOST
-              value: security-service
-            - name: MVC_SERVICE_HOST
-              value: mvc-service
-            - name: MVC_SECURITY_SERVICE_HOST
-              value: mvc-security-service
 ---
 apiVersion: v1
 kind: Service

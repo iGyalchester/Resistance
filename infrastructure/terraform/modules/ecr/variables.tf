@@ -9,7 +9,7 @@ variable "environment" {
 }
 
 variable "services" {
-  description = "Deployed services (name => container port). Only the two the tracker needs on AWS; rest-api-service and the course demos are never deployed."
+  description = "Deployed services (name => container port). Only the two the tracker needs on AWS; the course demo modules are never deployed."
   type        = map(number)
   default = {
     mvc-service    = 8085

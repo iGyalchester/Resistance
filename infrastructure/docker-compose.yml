@@ -18,20 +18,6 @@ services:
       timeout: 5s
       retries: 20
 
-  rest-api-service:
-    build:
-      context: ..
-      dockerfile: infrastructure/docker/Dockerfile
-      args:
-        MODULE: services/rest-api-service
-    environment:
-      DB_HOST: mysql
-    ports:
-      - "8083:8083"
-    depends_on:
-      mysql:
-        condition: service_healthy
-
   security-service:
     build:
       context: ..
@@ -57,6 +43,10 @@ services:
       # optional AuditFlow integration (blank = off); see docs/E2E-TEST-PLAN.md
       TRACKER_AUDIT_URL: ${TRACKER_AUDIT_URL:-}
       TRACKER_AUDIT_TOKEN: ${TRACKER_AUDIT_TOKEN:-}
+      # optional in-app assistant (blank = feature hidden)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # comma-separated emails that get the Admin page (blank = nobody)
+      TRACKER_ADMIN_EMAILS: ${TRACKER_ADMIN_EMAILS:-}
     ports:
       - "8085:8085"
     depends_on:
@@ -88,6 +78,8 @@ services:
       # optional AuditFlow integration (blank = off); see docs/E2E-TEST-PLAN.md
       TRACKER_AUDIT_URL: ${TRACKER_AUDIT_URL:-}
       TRACKER_AUDIT_TOKEN: ${TRACKER_AUDIT_TOKEN:-}
+      # optional Claude fallback for emails the heuristics cannot parse
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8087:8087"
     depends_on:
@@ -101,7 +93,6 @@ services:
       args:
         MODULE: api-gateway
     environment:
-      REST_API_SERVICE_HOST: rest-api-service
       INTAKE_SERVICE_HOST: intake-service
       SECURITY_SERVICE_HOST: security-service
       MVC_SERVICE_HOST: mvc-service
@@ -109,7 +100,6 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - rest-api-service
       - intake-service
       - security-service
       - mvc-service

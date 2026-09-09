@@ -171,26 +171,23 @@ resource "aws_ses_receipt_rule" "intake" {
   enabled      = true
   scan_enabled = true
 
-  # The archive copy, kept for debugging a bad parse. Deliberately without a
-  # topic_arn: that publishes a second notification carrying only metadata,
-  # and whichever of the two arrived first would decide how the mail parsed.
+  # One action, one notification. The object is the message; the
+  # notification names it (receipt.action.bucketName/objectKey) and
+  # intake-service reads it back through its task role.
+  #
+  # This replaced an sns_action, which embeds the base64 MIME directly in the
+  # notification. That worked, but SNS refuses a notification over 150 KB and
+  # SES bounces the mail outright - so a confirmation email with a logo
+  # attached was rejected rather than delivered. Reading from S3 has no
+  # ceiling below SES's own 40 MB.
+  #
+  # Note there is exactly one action, not both. Two actions publish two
+  # notifications for the same mail, and whichever arrived first would decide
+  # how it parsed.
   s3_action {
     bucket_name = aws_s3_bucket.raw_mail.bucket
+    topic_arn   = aws_sns_topic.intake.arn
     position    = 1
-  }
-
-  # What intake-service acts on. Only an sns_action carries the message
-  # itself - the base64 MIME in the notification's "content" field - so with
-  # an s3_action alone the body arrived empty and nothing ever parsed.
-  #
-  # Limit: SNS rejects a notification larger than 150 KB and SES bounces the
-  # mail. A bounce is at least visible to the sender, unlike the silent empty
-  # body it replaces; fetching the archived S3 object instead lifts the
-  # ceiling to SES's own 40 MB and is the planned follow-up.
-  sns_action {
-    topic_arn = aws_sns_topic.intake.arn
-    encoding  = "Base64"
-    position  = 2
   }
 
   depends_on = [

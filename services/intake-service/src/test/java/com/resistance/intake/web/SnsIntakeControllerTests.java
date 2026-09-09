@@ -1,5 +1,6 @@
 package com.resistance.intake.web;
 
+import com.resistance.intake.aws.RawMailStore;
 import com.resistance.intake.aws.SnsSignatureVerifier;
 import com.resistance.intake.service.InboundEmail;
 import com.resistance.intake.service.IntakeResult;
@@ -18,6 +19,9 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,16 +44,23 @@ class SnsIntakeControllerTests {
 
     private static final String TOPIC_ARN = "arn:aws:sns:us-east-1:123456789012:resistance-dev-intake";
 
+    private static final String BUCKET = "resistance-dev-raw-mail-123456789012";
+    private static final String OBJECT_KEY = "abcdef0123456789";
+
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
     private IntakeService intakeService;
     private SnsIntakeController controller;
+
+    /** What S3 would return, keyed by "bucket/key". Empty means "not there". */
+    private final Map<String, byte[]> s3 = new HashMap<>();
 
     @BeforeEach
     void setUp() {
         intakeService = mock(IntakeService.class);
         when(intakeService.process(any())).thenReturn(IntakeResult.ignored("IGNORED_NO_ALIAS"));
+        RawMailStore store = (bucket, key) -> Optional.ofNullable(s3.get(bucket + "/" + key));
         controller = new SnsIntakeController(intakeService, jsonMapper, RestClient.builder(),
-                new SnsSignatureVerifier(url -> null), TOPIC_ARN, false);
+                new SnsSignatureVerifier(url -> null), store, TOPIC_ARN, false);
     }
 
     @Test
@@ -118,6 +129,83 @@ class SnsIntakeControllerTests {
         return captor.getValue();
     }
 
+
+    /**
+     * The reason this path exists. An sns_action embeds base64 MIME in the
+     * notification, but SNS refuses anything over 150 KB and SES bounces the
+     * mail - so a confirmation with a logo attached never arrives at all. The
+     * s3_action archives every message whatever its size and the notification
+     * names the object, so the body comes from there.
+     */
+    @Test
+    void fetchesTheMimeFromS3WhenTheReceiptNamesAnObject() throws Exception {
+        s3.put(BUCKET + "/" + OBJECT_KEY, mimeBytes("careers@acme-recruiting.example", "Acme Recruiting",
+                "Thank you for applying to Acme",
+                "Hi Boris,\n\nWe received your application for Backend Engineer.\n"));
+
+        ResponseEntity<?> response = controller.receive(sns("Notification", TOPIC_ARN, sesWithS3Action()));
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        InboundEmail email = processedEmail();
+        assertTrue(email.body().contains("We received your application for Backend Engineer"),
+                "the archived MIME should reach the parser, was: " + email.body());
+        assertEquals("careers@acme-recruiting.example", email.fromAddress());
+        assertEquals("Acme Recruiting", email.fromName());
+    }
+
+    /**
+     * A message far past SNS's 150 KB notification limit. Nothing special
+     * happens - which is the point of reading from S3 rather than from the
+     * notification.
+     */
+    @Test
+    void aMessageTooLargeForAnSnsNotificationStillParses() throws Exception {
+        String longBody = "We received your application for Backend Engineer.\n"
+                + "x".repeat(300_000);
+        s3.put(BUCKET + "/" + OBJECT_KEY, mimeBytes("careers@acme-recruiting.example", "Acme Recruiting",
+                "Thank you for applying to Acme", longBody));
+
+        ResponseEntity<?> response = controller.receive(sns("Notification", TOPIC_ARN, sesWithS3Action()));
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertTrue(processedEmail().body().contains("We received your application for Backend Engineer"));
+    }
+
+    /**
+     * The object is gone, or the task role cannot read it. Filing the mail
+     * from its headers gives a worse parse; dropping it would lose the
+     * application entirely.
+     */
+    @Test
+    void fallsBackToHeadersWhenTheObjectIsMissing() {
+        ResponseEntity<?> response = controller.receive(sns("Notification", TOPIC_ARN, sesWithS3Action()));
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        InboundEmail email = processedEmail();
+        assertEquals("", email.body());
+        assertEquals("bounce@acme-recruiting.example", email.fromAddress());
+        assertEquals("track+boris@dev.resistance.example", email.toAddress());
+        assertEquals("Envelope subject", email.subject());
+    }
+
+    /**
+     * Inline content wins, and S3 is not consulted. Keeps the local and test
+     * paths working with no bucket at all.
+     */
+    @Test
+    void inlineContentIsPreferredOverTheArchivedCopy() throws Exception {
+        String inline = base64Mime("inline@acme-recruiting.example", "Inline",
+                "Inline subject", "Body from the notification.\n");
+        s3.put(BUCKET + "/" + OBJECT_KEY, mimeBytes("s3@acme-recruiting.example", "FromS3",
+                "S3 subject", "Body from S3.\n"));
+
+        controller.receive(sns("Notification", TOPIC_ARN, sesNode(inline, true)));
+
+        InboundEmail email = processedEmail();
+        assertTrue(email.body().contains("Body from the notification"));
+        assertEquals("inline@acme-recruiting.example", email.fromAddress());
+    }
+
     /** The SNS envelope intake-service receives over HTTPS. */
     private String sns(String type, String topicArn, String sesJson) {
         ObjectNode message = jsonMapper.createObjectNode();
@@ -133,16 +221,36 @@ class SnsIntakeControllerTests {
 
     /** SES's own JSON, carried as a string in the envelope's Message field. */
     private String ses(String base64Content) {
+        return sesNode(base64Content, false);
+    }
+
+    /** What SES publishes for an s3_action: no content, an object to fetch. */
+    private String sesWithS3Action() {
+        return sesNode(null, true);
+    }
+
+    private String sesNode(String base64Content, boolean s3Action) {
         ObjectNode ses = jsonMapper.createObjectNode();
         ses.put("notificationType", "Received");
         ObjectNode mail = ses.putObject("mail");
         mail.put("source", "bounce@acme-recruiting.example");
+        mail.put("messageId", OBJECT_KEY);
         mail.putArray("destination").add("track+boris@dev.resistance.example");
         mail.putObject("commonHeaders").put("subject", "Envelope subject");
         if (base64Content != null) {
             ses.put("content", base64Content);
         }
+        if (s3Action) {
+            ObjectNode action = ses.putObject("receipt").putObject("action");
+            action.put("type", "S3");
+            action.put("bucketName", BUCKET);
+            action.put("objectKey", OBJECT_KEY);
+        }
         return jsonMapper.writeValueAsString(ses);
+    }
+
+    private byte[] mimeBytes(String address, String personal, String subject, String body) throws Exception {
+        return Base64.getDecoder().decode(base64Mime(address, personal, subject, body));
     }
 
     private String base64Mime(String address, String personal, String subject, String body) throws Exception {

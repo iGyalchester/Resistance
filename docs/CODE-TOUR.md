@@ -45,10 +45,9 @@ Before you start:
    for that to be safe. Also notice `/api/**` gets a JSON 401 instead of a
    redirect to the login page — a browser wants the redirect, a SPA wants
    the status code.
-2. `auth/LoginController.java` (the HTML form) and
-   `api/AuthApiController.java` (the JSON API) — two front doors, same
-   sequence. Read one, then the other, and notice they share the next three
-   classes so they can never drift apart.
+2. `api/AuthApiController.java` — the login endpoints the React app
+   calls: request a code, verify it, who am I, log out. Both answers to
+   a code request are identical whether the address exists or not.
 3. `auth/OtpRequestThrottle.java` — how many codes one email or one IP may
    request. Runs before anything is sent.
 4. `auth/OtpService.java` — issues a 6-digit code, stores only its SHA-256
@@ -75,14 +74,17 @@ a real bug), `LoginCodePurgeJobTests`.
    someone else's row is a not-found, not a permission error. This is
    where tenancy is enforced, deliberately below the controllers so no
    controller can forget.
-2. `controller/JobApplicationController.java`,
-   `controller/ContactController.java`, `controller/DashboardController.java`
-   — the Thymeleaf pages. They read the account id from the session and
-   pass it down; they never trust an id from the URL alone.
-3. `api/ApplicationApiController.java` + `api/ApplicationView.java` — the
-   same data as JSON for React. Notice the DTO: entities are never
-   serialized directly (lazy proxies, and the owner field would leak).
-4. `controller/ProfileController.java` — profile view/update; it is also
+2. `api/ApplicationApiController.java` + `api/ApplicationView.java` — the
+   data as JSON for React. The controller reads the account id from the
+   session (`api/ApiSessions.java`) and passes it down; it never trusts an
+   id from the URL alone. Notice the DTO: entities are never serialized
+   directly (lazy proxies, and the owner field would leak).
+3. `api/ContactApiController.java`, `api/AnalyticsApiController.java`
+   (`analytics/AnalyticsService.java` is the dashboard arithmetic, a pure
+   function with a clock), `api/AssistantApiController.java`
+   (`assistant/` is the Claude-backed chat: grounded prompt, proposals that
+   never write), `api/AdminApiController.java` (`admin/`, ADMIN role only).
+4. `api/ProfileApiController.java` — profile view/update; it is also
    an audit emit point (Stop 4).
 5. `dao/` — Spring Data repositories. Mostly empty interfaces; the method
    names *are* the queries.
@@ -163,20 +165,24 @@ while the server hangs"), and the emission cases inside
 
 ## Stop 5 — The React front end (`frontend/src`)
 
-1. `main.tsx` → `App.tsx` — the routes: two login pages and the dashboard,
-   with a guard that asks `/api/auth/me` once.
+1. `main.tsx` → `App.tsx` — the routes: two login pages, then everything
+   under the `AppShell` layout (dashboard, applications, contacts,
+   assistant, help, profile, admin), with a guard that asks `/api/auth/me`
+   once. `config/SpaConfig.java` on the server is what makes a reload of
+   any of these URLs return the shell.
 2. `api/client.ts` — the only place `fetch` is called. Notice it reads the
    CSRF cookie into the `X-XSRF-TOKEN` header (the other half of Stop 1's
    cookie setup) and turns a 401 into "go to login".
 3. `auth/AuthContext.tsx` — who is logged in, for the rest of the tree.
 4. `pages/LoginEmailPage.tsx`, `pages/LoginCodePage.tsx`,
-   `pages/DashboardPage.tsx` — the screens; `api/types.ts` mirrors the
-   Java DTOs from Stop 2.
+   `pages/DashboardPage.tsx`, `pages/ApplicationsPage.tsx` — the screens;
+   `api/types.ts` mirrors the Java DTOs from Stop 2; `charts/` are the
+   recharts pieces; `components/assistant/` is the chat.
 5. In development, Vite proxies `/api` to port 8085 (`vite.config.ts`), so
    the browser sees one origin and the session cookie just works.
 
 Proof: `src/test/client.test.ts`, `src/test/LoginFlow.test.tsx`,
-`src/test/DashboardPage.test.tsx`.
+`src/test/DashboardPage.test.tsx`, `src/test/AssistantPage.test.tsx`.
 
 ---
 
@@ -188,8 +194,9 @@ Proof: `src/test/client.test.ts`, `src/test/LoginFlow.test.tsx`,
 - `application.properties` in each service: the `dev` profile is fully
   local; `qa` requires real AWS values and fails fast without them
   (`infrastructure/aws/README.md`).
-- `.github/workflows/build.yml` (Maven with a MySQL service container, and
-  the frontend job) and `codeql.yml`.
+- `.github/workflows/build.yml` (Maven with a MySQL service container -
+  the mvc-service build bundles the React app - and the faster
+  frontend-only job) and `codeql.yml`.
 
 ---
 
@@ -201,8 +208,7 @@ read `JobApplicationOwnershipTests`. That is the spine.
 
 ## Where this is going
 
-The React app still covers only login and the dashboard (application and
-contact editing remain Thymeleaf), and the roadmap in `CLAUDE.md` lists
-what comes next. The AuditFlow side of the story — where these audit
+The React app is the whole UI now (the server-rendered pages are gone),
+and the roadmap in `CLAUDE.md` lists what comes next. The AuditFlow side of the story — where these audit
 events become alerts and compliance reports — is documented in that repo's
 own code tour.

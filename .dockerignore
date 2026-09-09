@@ -1,0 +1,10 @@
+# The Deploy workflow builds with the repository root as its context, so
+# everything here is uploaded to the daemon on every image build unless it
+# is excluded. .git and the target directories are the bulk of it.
+.git
+.github
+**/target
+frontend/node_modules
+frontend/dist
+docs
+*.md

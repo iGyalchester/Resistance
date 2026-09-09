@@ -66,9 +66,13 @@ The shortest path from "a person mistypes a login code in Resistance" to
 # and the endpoint is open to every customerId, which is the dev default.
 mvn -DskipTests clean package && AUDIT_INGESTION_TOKENS=resistance=e2e-secret docker compose --profile app up --build -d
 
-# Resistance: MySQL + the tracker, pointed at the platform
+# Resistance: MySQL + the tracker, pointed at the platform. The install is once
+# per checkout; spring-boot:run then runs with -pl alone, because -am would add
+# the pom-packaged parent to the reactor and the run goal dies on it with
+# "Unable to find a suitable main class".
 docker compose -f infrastructure/docker-compose.yml up -d mysql
-TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service -am spring-boot:run
+mvn -pl services/mvc-service -am install -DskipTests
+TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service spring-boot:run
 ```
 
 Now fail a login at `http://localhost:8085/login` (wrong code), then:
@@ -95,7 +99,7 @@ would collide with AuditFlow's 8080/8081):
 | Resistance MySQL | 3306 | `docker compose -f infrastructure/docker-compose.yml up -d mysql` (Resistance repo) |
 | AuditFlow (all of it) | 9092 / 5432 / 4566 + 8080–8084 | `mvn -DskipTests clean package && AUDIT_INGESTION_TOKENS=resistance=e2e-secret docker compose --profile app up --build -d` (auditflow-platform repo; the evidence bucket is created by an init hook). Or `docker compose up -d` for infrastructure only and `mvn -pl services/<name> spring-boot:run` per service with the same env var. |
 | AuditFlow api-gateway | 8080 | part of the profile above; auth open, `X-Customer-Id: resistance` on every call |
-| Resistance mvc-service | 8085 | `TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service -am spring-boot:run` |
+| Resistance mvc-service | 8085 | `mvn -pl services/mvc-service -am install -DskipTests` once, then `TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service spring-boot:run` (no `-am` on `spring-boot:run`: it would drag the main-class-less parent into the reactor) |
 | Resistance intake-service | 8087 | same two env vars, `-pl services/intake-service` |
 | collector-agent | – | E2E-6 only: `AGENT_INGESTION_TOKEN=e2e-secret mvn -pl agent/collector-agent spring-boot:run` (auditflow-platform repo) |
 
@@ -272,3 +276,32 @@ auditflow-platform's CI** — docker-compose both stacks (compose already
 exists on each side), run E2E-1/2/3 as a script of curl + psql assertions,
 E2E-6's redaction grep included. Everything above was designed so that job
 is a transcription of this document, not new thinking.
+
+## 5. Manual UI pass (Resistance alone, after the React v2 slices)
+
+Run `docker compose -f infrastructure/docker-compose.yml up --build` with
+`ANTHROPIC_API_KEY` and `TRACKER_ADMIN_EMAILS=demo@resistance.com`
+exported, open `http://localhost:8085`, and walk this once per release:
+
+1. **Login:** the shell loads at `/`, `/login` asks for an email, the code
+   is in the mvc-service log (dev), and the dashboard shows the seeded
+   account's applications with an intake address on it.
+2. **Dashboard numbers vs seed data:** the funnel lists every status, the
+   headline tiles match the seed rows, and the "needs attention" list has
+   the quiet one; "Mark withdrawn" moves it and the timeline records it.
+3. **Applications:** add one, change a status in place (the detail page's
+   timeline gains a MANUAL row), delete it with the confirmation.
+4. **Reload any deep link** (`/applications/<id>`, `/help`): the page
+   comes back, not a 404.
+5. **Assistant:** "which ones should I follow up on?" names the quiet
+   application; "mark it withdrawn" yields a card; Apply updates the
+   table and the timeline shows it. With the key unset the nav still has
+   Assistant and the page says it is not configured.
+6. **Help:** the FAQ lists; the same answer text appears when the
+   assistant is asked the FAQ question.
+7. **Admin:** as the demo account `/admin` shows counts and the accounts
+   list; as another account the nav hides Admin and a direct visit says
+   "not authorized" (the API answers 403).
+8. **Security headers:** with the qa profile behind the load balancer,
+   `curl -I https://<host>/actuator/health` shows
+   `Strict-Transport-Security`; a dev instance shows none.

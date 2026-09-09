@@ -10,7 +10,8 @@ import java.time.LocalDate;
  * record instead.
  */
 public record ApplicationView(int id, String companyName, String positionTitle,
-                              String status, LocalDate appliedOn, String contactName) {
+                              String status, LocalDate appliedOn,
+                              Integer contactId, String contactName) {
 
     public static ApplicationView of(JobApplication application) {
         String contactName = application.getContact() == null ? null
@@ -21,6 +22,7 @@ public record ApplicationView(int id, String companyName, String positionTitle,
                 application.getPositionTitle(),
                 application.getStatus() == null ? null : application.getStatus().name(),
                 application.getAppliedOn(),
+                application.getContact() == null ? null : application.getContact().getId(),
                 contactName);
     }
 }

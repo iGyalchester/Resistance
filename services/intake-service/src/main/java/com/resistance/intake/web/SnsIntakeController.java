@@ -1,5 +1,6 @@
 package com.resistance.intake.web;
 
+import com.resistance.intake.aws.RawMailStore;
 import com.resistance.intake.aws.SnsSignatureVerifier;
 import com.resistance.intake.mail.MimeText;
 import com.resistance.intake.service.InboundEmail;
@@ -42,6 +43,7 @@ public class SnsIntakeController {
     private final JsonMapper jsonMapper;
     private final RestClient restClient;
     private final SnsSignatureVerifier signatureVerifier;
+    private final RawMailStore rawMailStore;
     private final String expectedTopicArn;
     private final boolean verifySignature;
 
@@ -49,12 +51,14 @@ public class SnsIntakeController {
                                JsonMapper jsonMapper,
                                RestClient.Builder restClientBuilder,
                                SnsSignatureVerifier signatureVerifier,
+                               RawMailStore rawMailStore,
                                @Value("${intake.aws.topic-arn:}") String expectedTopicArn,
                                @Value("${intake.aws.verify-signature:true}") boolean verifySignature) {
         this.intakeService = intakeService;
         this.jsonMapper = jsonMapper;
         this.restClient = restClientBuilder.build();
         this.signatureVerifier = signatureVerifier;
+        this.rawMailStore = rawMailStore;
         this.expectedTopicArn = expectedTopicArn;
         this.verifySignature = verifySignature;
     }
@@ -113,10 +117,9 @@ public class SnsIntakeController {
         String subject = mail.path("commonHeaders").path("subject").asString(null);
         String body = "";
 
-        String content = ses.path("content").asString(null);
-        if (content != null && !content.isBlank()) {
+        byte[] mime = mimeBytes(ses);
+        if (mime != null) {
             try {
-                byte[] mime = Base64.getMimeDecoder().decode(content);
                 Session session = Session.getInstance(new Properties());
                 MimeMessage mimeMessage = new MimeMessage(session, new ByteArrayInputStream(mime));
 
@@ -130,11 +133,49 @@ public class SnsIntakeController {
                 }
                 body = MimeText.extract(mimeMessage);
             } catch (Exception e) {
-                log.warn("Failed to decode SES MIME content, falling back to headers only", e);
+                log.warn("Failed to parse SES MIME message, falling back to headers only", e);
             }
         }
 
         return new InboundEmail(fromAddress, fromName, toAddress, subject, body);
+    }
+
+    /**
+     * The raw message, from the notification or from S3, or null.
+     *
+     * <p>Inline content first: an sns_action embeds base64 MIME directly,
+     * which is what the local and test paths use. SNS refuses a notification
+     * over 150 KB and SES bounces the mail, so in AWS the receipt rule uses
+     * an s3_action instead - no ceiling below SES's own 40 MB - and the
+     * notification names the object rather than carrying it.
+     */
+    private byte[] mimeBytes(JsonNode ses) {
+        String messageId = ses.path("mail").path("messageId").asString("(unknown id)");
+
+        String content = ses.path("content").asString(null);
+        if (content != null && !content.isBlank()) {
+            try {
+                return Base64.getMimeDecoder().decode(content);
+            } catch (IllegalArgumentException e) {
+                log.warn("SES content for {} was not valid base64: {}", messageId, e.toString());
+            }
+        }
+
+        JsonNode action = ses.path("receipt").path("action");
+        if ("S3".equals(action.path("type").asString(null))) {
+            String bucket = action.path("bucketName").asString(null);
+            String key = action.path("objectKey").asString(null);
+            byte[] fromS3 = rawMailStore.fetch(bucket, key).orElse(null);
+            if (fromS3 == null) {
+                log.warn("Archived message s3://{}/{} could not be read; filing {} from headers only",
+                        bucket, key, messageId);
+            }
+            return fromS3;
+        }
+
+        log.warn("SES notification for {} carried neither inline content nor an S3 action; "
+                + "filing from headers only", messageId);
+        return null;
     }
 
     private String text(JsonNode node, String field) {

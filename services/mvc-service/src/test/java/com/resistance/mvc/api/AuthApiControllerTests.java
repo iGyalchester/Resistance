@@ -1,6 +1,5 @@
 package com.resistance.mvc.api;
 
-import com.resistance.mvc.auth.LoginController;
 import com.resistance.mvc.auth.OtpRequestThrottle;
 import com.resistance.mvc.auth.OtpService;
 import com.resistance.mvc.auth.SessionAuthenticator;
@@ -46,16 +45,20 @@ class AuthApiControllerTests {
         // real authenticator + repository: the login test should prove the
         // session actually ends up authenticated, not that a mock was called
         SessionAuthenticator authenticator =
-                new SessionAuthenticator(new HttpSessionSecurityContextRepository());
+                new SessionAuthenticator(new HttpSessionSecurityContextRepository(), new com.resistance.mvc.auth.AdminRoles(""));
 
-        AuthApiController controller = new AuthApiController(otpService, authenticator,
-                emailThrottle, ipThrottle, accounts, "track@resistance.example",
-                com.resistance.shared.utils.audit.AuditEventClient.disabled());
-        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(controller(authenticator, "")).build();
 
         boris = new UserAccount("Boris Gerard", "boris@gmail.com");
         boris.setId(7);
         boris.setIntakeAlias("boris2k4mp9");
+    }
+
+    private AuthApiController controller(SessionAuthenticator authenticator, String assistantKey) {
+        return new AuthApiController(otpService, authenticator,
+                emailThrottle, ipThrottle, accounts, "track@resistance.example",
+                com.resistance.shared.utils.audit.AuditEventClient.disabled(), assistantKey,
+                new com.resistance.mvc.auth.AuthMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @Test
@@ -94,10 +97,12 @@ class AuthApiControllerTests {
                 .andExpect(jsonPath("$.fullName").value("Boris Gerard"))
                 .andExpect(jsonPath("$.email").value("boris@gmail.com"))
                 .andExpect(jsonPath("$.intakeAddress").value("track+boris2k4mp9@resistance.example"))
+                .andExpect(jsonPath("$.roles[0]").value("USER"))
+                .andExpect(jsonPath("$.features.assistant").value(false))
                 .andReturn();
 
         assertEquals(7, result.getRequest().getSession()
-                .getAttribute(LoginController.SESSION_ACCOUNT_ID));
+                .getAttribute(SessionAuthenticator.SESSION_ACCOUNT_ID));
     }
 
     @Test
@@ -111,17 +116,30 @@ class AuthApiControllerTests {
                 .andReturn();
 
         assertEquals(null, result.getRequest().getSession()
-                .getAttribute(LoginController.SESSION_ACCOUNT_ID));
+                .getAttribute(SessionAuthenticator.SESSION_ACCOUNT_ID));
     }
 
     @Test
     void meReturnsTheSessionAccount() throws Exception {
         when(accounts.findById(7)).thenReturn(Optional.of(boris));
 
-        mockMvc.perform(get("/api/auth/me").sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))
+        mockMvc.perform(get("/api/auth/me").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("boris@gmail.com"))
                 .andExpect(jsonPath("$.intakeAddress").value("track+boris2k4mp9@resistance.example"));
+    }
+
+    @Test
+    void meReportsTheAssistantFeatureWhenAKeyIsConfigured() throws Exception {
+        when(accounts.findById(7)).thenReturn(Optional.of(boris));
+        MockMvc withKey = MockMvcBuilders.standaloneSetup(
+                controller(new SessionAuthenticator(new HttpSessionSecurityContextRepository(), new com.resistance.mvc.auth.AdminRoles("")), "sk-test"))
+                .build();
+
+        withKey.perform(get("/api/auth/me").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.features.assistant").value(true))
+                .andExpect(jsonPath("$.roles[0]").value("USER"));
     }
 
     @Test
@@ -133,7 +151,21 @@ class AuthApiControllerTests {
 
     @Test
     void logoutInvalidatesTheSession() throws Exception {
-        mockMvc.perform(post("/api/auth/logout").sessionAttr(LoginController.SESSION_ACCOUNT_ID, 7))
+        mockMvc.perform(post("/api/auth/logout").sessionAttr(SessionAuthenticator.SESSION_ACCOUNT_ID, 7))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void absurdlyLongEmailIsRejectedBeforeAnyThrottleOrCode() throws Exception {
+        when(emailThrottle.tryAcquire(anyString())).thenReturn(true);
+        when(ipThrottle.tryAcquire(anyString())).thenReturn(true);
+
+        mockMvc.perform(post("/api/auth/code").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + "a".repeat(300) + "@x.io\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("email_invalid"));
+
+        verify(otpService, never()).requestCode(anyString());
+        verify(emailThrottle, never()).tryAcquire(anyString());
     }
 }

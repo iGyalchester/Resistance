@@ -13,8 +13,11 @@ bootstrap/          applied ONCE by hand with your own credentials: the state bu
 modules/
   ecr/              one image repository per deployed service
   email-intake/     SES receiving for one mail domain: verification, DKIM, MX,
-                    raw-mail archive bucket, SNS topic, a receipt rule that
-                    publishes each message (body included) to SNS
+                    raw-mail bucket, SNS topic, and a receipt rule that writes
+                    each message to the bucket and notifies the topic. The
+                    notification names the object; intake-service reads the
+                    MIME back, so message size is bounded by SES's 40 MB
+                    rather than SNS's 150 KB
   network/          VPC: public subnets (ALB + tasks), private subnets (database),
                     three security groups; deliberately no NAT gateway
   secrets/          KMS key; generated field-encryption key, webhook token and
@@ -24,15 +27,24 @@ modules/
                     and DNS record, /intake/* routed to intake-service, and the
                     topic's HTTPS subscription (it can only be confirmed once the
                     service answering it is up, so it belongs with the service)
+stack/              the single root: composes the modules above. Applied once per
+                    environment, with a different tfvars file and a different state
+                    key, chosen by -var environment=<env>
 environments/
-  dev/              track@dev.<domain>, https://tracker-dev.<domain>
-  prod/             track@<domain>,     https://tracker.<domain>
+  dev.tfvars        track@dev.<domain>, https://tracker-dev.<domain>
+  prod.tfvars       track@<domain>,     https://tracker.<domain>
+  <env>.backend.hcl.example
 ```
 
 Two environments share one AWS account and one hosted zone, and differ
-only in `terraform.tfvars`. `dev` is applied automatically on every push to
-`main`; `prod` is applied only when you run the Terraform workflow by hand
-and pick it.
+only in their tfvars - now literally, rather than by convention. They used
+to be two directories that differed by a single `environment = "dev"`
+literal, each with its own copy of every variable declaration, so a new
+knob had to be added in three places and could silently disagree between
+two of them. State keys are unchanged, so nothing was migrated.
+
+`dev` is applied automatically on every push to `main`; `prod` is applied
+only when you run the Terraform workflow by hand and pick it.
 
 ## What it costs
 
@@ -98,8 +110,8 @@ always-on set can stay applied indefinitely.
    bound: an environment-bound job presents `environment:<name>` as its
    subject instead of `pull_request`, which would defeat the plan role's
    trust policy.
-4. **Fill in the tfvars.** In `environments/dev/terraform.tfvars` and
-   `environments/prod/terraform.tfvars` replace `ZCHANGEME` with the
+4. **Fill in the tfvars.** In `environments/dev.tfvars` and
+   `environments/prod.tfvars` replace `ZCHANGEME` with the
    `hosted_zone_id` output, the `permissions_boundary_arn` placeholder with
    the `ci_boundary_policy_arn` output, and `example.com` with your domain.
    Commit. The boundary is not optional: the CI role is only allowed to
@@ -134,7 +146,7 @@ RDS bill by the hour.
    environment's ECR repositories, writes that sha into
    `/resistance/dev/image-tag`, and reports that there is no cluster to roll
    yet.
-2. Set `app_enabled = true` in `environments/dev/terraform.tfvars`, merge
+2. Set `app_enabled = true` in `environments/dev.tfvars`, merge
    to `main`. The apply creates the VPC, the database (about ten minutes
    the first time), the secrets, the certificate (validated by DNS records
    in the hosted zone, a few minutes), the load balancer, the two services,
@@ -199,7 +211,7 @@ than by a push:
    repositories and its `/resistance/prod/image-tag` parameter. Deploy fails
    with a clear message until they exist.
 1. Deploy → Run workflow → `prod`.
-2. `app_enabled = true` in `environments/prod/terraform.tfvars`, merge, then
+2. `app_enabled = true` in `environments/prod.tfvars`, merge, then
    Terraform → Run workflow → `prod`. prod's tfvars keep the data: deletion
    protection on the instance and the load balancer, a final snapshot on
    destroy, seven days of backups, ninety days of logs, a thirty-day window
@@ -230,14 +242,20 @@ then `audit_url` + `audit_token_secret_arn` (AuditFlow) and
 ## Working locally
 
 CI writes `backend.hcl` from the repository variables. To plan from your
-machine, copy `backend.hcl.example` to `backend.hcl` in the environment
-directory, fill in the bucket, and:
+machine, copy `environments/<env>.backend.hcl.example` to
+`stack/backend.hcl`, fill in the bucket, and:
 
 ```bash
-cd infrastructure/terraform/environments/dev
-terraform init -backend-config=backend.hcl
-terraform plan -var-file=terraform.tfvars
+cd infrastructure/terraform/stack
+TF_DATA_DIR=.terraform-dev terraform init -backend-config=backend.hcl
+TF_DATA_DIR=.terraform-dev terraform plan   -var-file=../environments/dev.tfvars -var environment=dev
 ```
+
+`TF_DATA_DIR` is what lets both environments stay initialised side by side
+out of one directory: each keeps its own `.terraform-<env>` with its own
+backend state key. Without it, switching environment means re-running
+`init -reconfigure` every time, which is what CI does (it starts clean each
+job, so it does not need the trick).
 
 The lock files carry checksums for linux, macOS (Intel and Apple silicon)
 and Windows, so `init` works from any of them. If you add or upgrade a

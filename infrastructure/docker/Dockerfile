@@ -1,7 +1,7 @@
 # Generic image for any Spring Boot module in this monorepo.
 # Build from the repository root, e.g.:
 #   docker build -f infrastructure/docker/Dockerfile \
-#     --build-arg MODULE=services/rest-api-service -t resistance/rest-api-service .
+#     --build-arg MODULE=services/mvc-service -t resistance/mvc-service .
 ARG JAVA_VERSION=26
 
 FROM maven:3.9-eclipse-temurin-${JAVA_VERSION} AS build
