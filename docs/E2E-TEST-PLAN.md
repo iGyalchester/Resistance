@@ -87,6 +87,20 @@ curl -s -H 'X-Customer-Id: resistance' localhost:8080/api/v1/reports/soc2       
 gateway runs with auth open; in the cloud the same calls carry a bearer
 token and the header is ignored.
 
+**If the curls come back empty**, walk the event's path in order; every
+hop has one line that settles it.
+
+| Hop | Check | Means |
+|---|---|---|
+| Tracker sent it | Resistance's console right after the failed login | no line at all = auditing off (start mvc-service with `TRACKER_AUDIT_URL`/`TRACKER_AUDIT_TOKEN` on the same command line); `rejected with status 401/403` = token or customer id mismatch; `not delivered` = platform down |
+| Ingestion accepted it | `docker compose --profile app logs ingestion-service` | a `KafkaProducer` created on an `nio-8081-exec` thread and `ProducerId set` = the event is on the `audit-events` topic |
+| Enrichment stored it | `docker compose --profile app logs enrichment-service \| grep -E 'Dead-lettering\|NoSuchBucket\|Retry'` | `NoSuchBucketException` = the LocalStack evidence bucket is missing (fixed by enrichment's `LocalBucketInitializer`; by hand: `docker exec auditflow-localstack awslocal s3 mb s3://auditflow-events`). Dead-lettered events sit in `audit-events.DLT` and do not replay: fail a fresh login after fixing |
+| It is in the database | `docker exec auditflow-postgres psql -U auditflow -d auditflow -c "select customer_id,event_type,action,occurred_at from audit_events order by occurred_at desc limit 5"` | rows here but empty curls = the gateway is reading a different store or customer id |
+
+The platform's compose starts `ingestion`, `enrichment`, `alerting` and
+`api-gateway` as services named `<name>-service`; the container names
+(`auditflow-ingestion`, ...) are what Docker Desktop shows.
+
 ---
 
 ## 1. Environment (local, one machine)
