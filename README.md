@@ -85,7 +85,20 @@ Requires JDK 26 and Maven 3.9+ (Spring Boot 4.1).
 ```bash
 mvn clean package          # everything
 mvn -pl services/mvc-service -am package       # one service + its dependencies
+mvn -pl services/mvc-service -am install -DskipTests   # + into ~/.m2, to run it
 ```
+
+`-am` ("also make") builds a module's dependencies alongside it, and works for
+`package`, `install` and `test`. It is `spring-boot:run` that cannot take it: a
+goal named on the command line runs against *every* module in the reactor, and
+`-am` puts the `pom`-packaged parent in there, which has no main class, so the
+build dies before reaching your service:
+
+```
+Unable to find a suitable main class, please add a 'mainClass' property
+```
+
+Install the dependencies once with `-am`, then run the service with `-pl` alone.
 
 ## Running locally
 
@@ -108,7 +121,7 @@ docker compose -f infrastructure/docker-compose.yml down -v
 Then run any service, e.g.:
 
 ```bash
-mvn -pl services/security-service -am spring-boot:run
+mvn -pl services/security-service spring-boot:run
 ```
 
 `DB_HOST`/`DB_PORT` environment variables override the default
@@ -208,7 +221,7 @@ applied immediately and rolled back with a message if the server refuses.
 
 ```bash
 # the built app: Maven installs Node, builds the frontend, and bakes it in
-mvn -pl services/mvc-service -am spring-boot:run      # http://localhost:8085
+mvn -pl services/mvc-service spring-boot:run          # http://localhost:8085
 mvn ... -Dfrontend.skip=true                          # backend only (no UI), faster
 
 # working on the UI: hot reload, /api proxied to the backend on :8085
@@ -435,7 +448,7 @@ field-encryption converter is JPA-specific; its `FieldEncryptor` core in
 extract → validate → transform → load pipeline defined in `etl-core`:
 
 ```bash
-mvn -pl etl/etl-runner -am spring-boot:run
+mvn -pl etl/etl-runner spring-boot:run
 ```
 
 By default it processes the bundled `sample-data/applications.csv` in dry-run
