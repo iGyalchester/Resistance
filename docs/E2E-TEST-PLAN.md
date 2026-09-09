@@ -66,9 +66,13 @@ The shortest path from "a person mistypes a login code in Resistance" to
 # and the endpoint is open to every customerId, which is the dev default.
 mvn -DskipTests clean package && AUDIT_INGESTION_TOKENS=resistance=e2e-secret docker compose --profile app up --build -d
 
-# Resistance: MySQL + the tracker, pointed at the platform
+# Resistance: MySQL + the tracker, pointed at the platform. The install is once
+# per checkout; spring-boot:run then runs with -pl alone, because -am would add
+# the pom-packaged parent to the reactor and the run goal dies on it with
+# "Unable to find a suitable main class".
 docker compose -f infrastructure/docker-compose.yml up -d mysql
-TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service -am spring-boot:run
+mvn -pl services/mvc-service -am install -DskipTests
+TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service spring-boot:run
 ```
 
 Now fail a login at `http://localhost:8085/login` (wrong code), then:
@@ -95,7 +99,7 @@ would collide with AuditFlow's 8080/8081):
 | Resistance MySQL | 3306 | `docker compose -f infrastructure/docker-compose.yml up -d mysql` (Resistance repo) |
 | AuditFlow (all of it) | 9092 / 5432 / 4566 + 8080–8084 | `mvn -DskipTests clean package && AUDIT_INGESTION_TOKENS=resistance=e2e-secret docker compose --profile app up --build -d` (auditflow-platform repo; the evidence bucket is created by an init hook). Or `docker compose up -d` for infrastructure only and `mvn -pl services/<name> spring-boot:run` per service with the same env var. |
 | AuditFlow api-gateway | 8080 | part of the profile above; auth open, `X-Customer-Id: resistance` on every call |
-| Resistance mvc-service | 8085 | `TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service -am spring-boot:run` |
+| Resistance mvc-service | 8085 | `mvn -pl services/mvc-service -am install -DskipTests` once, then `TRACKER_AUDIT_URL=http://localhost:8081 TRACKER_AUDIT_TOKEN=e2e-secret mvn -pl services/mvc-service spring-boot:run` (no `-am` on `spring-boot:run`: it would drag the main-class-less parent into the reactor) |
 | Resistance intake-service | 8087 | same two env vars, `-pl services/intake-service` |
 | collector-agent | – | E2E-6 only: `AGENT_INGESTION_TOKEN=e2e-secret mvn -pl agent/collector-agent spring-boot:run` (auditflow-platform repo) |
 
