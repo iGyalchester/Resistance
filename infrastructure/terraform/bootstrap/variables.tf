@@ -43,3 +43,8 @@ variable "ses_rule_set_name" {
   type        = string
   default     = "resistance"
 }
+variable "create_oidc_provider" {
+  description = "Create the account-wide GitHub OIDC provider (true) or read the one another bootstrap already created (false). AWS allows exactly one provider per URL per account, so exactly ONE of the two bootstraps in this account may set this to true. auditflow-infrastructure owns it; Resistance sets false."
+  type        = bool
+  default     = false
+}
