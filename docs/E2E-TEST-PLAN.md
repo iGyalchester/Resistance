@@ -93,9 +93,16 @@ hop has one line that settles it.
 | Hop | Check | Means |
 |---|---|---|
 | Tracker sent it | Resistance's console right after the failed login | no line at all = auditing off (start mvc-service with `TRACKER_AUDIT_URL`/`TRACKER_AUDIT_TOKEN` on the same command line); `rejected with status 401/403` = token or customer id mismatch; `not delivered` = platform down |
-| Ingestion accepted it | `docker compose --profile app logs ingestion-service` | a `KafkaProducer` created on an `nio-8081-exec` thread and `ProducerId set` = the event is on the `audit-events` topic |
-| Enrichment stored it | `docker compose --profile app logs enrichment-service \| grep -E 'Dead-lettering\|NoSuchBucket\|Retry'` | `NoSuchBucketException` = the LocalStack evidence bucket is missing (fixed by enrichment's `LocalBucketInitializer`; by hand: `docker exec auditflow-localstack awslocal s3 mb s3://auditflow-events`). Dead-lettered events sit in `audit-events.DLT` and do not replay: fail a fresh login after fixing |
+| Ingestion accepted it | mvc-service's log: `audit event sent eventId=<id> type=AUTH_EVENT`, then `curl -s -H 'X-Customer-Id: resistance' localhost:8080/api/v1/audit-logs/<id>` | 200 with the event = it went all the way to Postgres; 404 = ingestion, Kafka or enrichment dropped it, keep walking. (The `KafkaProducer ... ProducerId set` line in ingestion's log appears once per process, on the first event only, so it says nothing about the second) |
+| Enrichment stored it | the command below the table | `NoSuchBucketException` = the LocalStack evidence bucket is missing (enrichment's `LocalBucketInitializer` creates it on start, the compose ready hook too; by hand: `docker exec auditflow-localstack awslocal s3 mb s3://auditflow-events`). Dead-lettered events sit in `audit-events.DLT` and do not replay: fail a fresh login after fixing |
 | It is in the database | `docker exec auditflow-postgres psql -U auditflow -d auditflow -c "select customer_id,event_type,action,occurred_at from audit_events order by occurred_at desc limit 5"` | rows here but empty curls = the gateway is reading a different store or customer id |
+
+The enrichment check, outside the table because a `|` inside a table cell
+has to be escaped and the escaped command is wrong when copied:
+
+```bash
+docker compose --profile app logs enrichment-service | grep -E 'Dead-lettering|NoSuchBucket|Retry'
+```
 
 The platform's compose starts `ingestion`, `enrichment`, `alerting` and
 `api-gateway` as services named `<name>-service`; the container names

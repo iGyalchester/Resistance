@@ -69,7 +69,8 @@ public class AuditEventClient {
         }
         try {
             Map<String, String> fields = new LinkedHashMap<>();
-            fields.put("eventId", UUID.randomUUID().toString());
+            String eventId = UUID.randomUUID().toString();
+            fields.put("eventId", eventId);
             // Our clock, read here on the calling thread - before the async
             // send, before any queueing, before the network. AuditFlow used
             // to stamp arrival time instead, so a slow or retried delivery
@@ -91,6 +92,11 @@ public class AuditEventClient {
                 request.header("X-Audit-Token", token);
             }
 
+            // The id is the one handle a person has on this event afterwards:
+            // GET /api/v1/audit-logs/<id> on the platform answers whether it
+            // arrived. Id and type only - no user, no resource - so the log
+            // line is not itself a record of who did what.
+            log.log(System.Logger.Level.INFO, "audit event sent eventId={0} type={1}", eventId, type);
             httpClient.sendAsync(request.build(), HttpResponse.BodyHandlers.discarding())
                     .whenComplete((response, error) -> {
                         if (error != null) {
